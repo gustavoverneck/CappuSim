@@ -9,14 +9,17 @@ from os import path
 from tqdm import tqdm
 
 # Internal Imports
-from .utils import velocities_sets
-from .translator import py_to_cl
+from .utils import velocities_sets, unflatten, Config, py_to_cl
 
+# Kernel Path
 lib_dir = path.dirname(__file__)
 stream_collide_kernel = lib_dir + r"\stream_collide_kernel.cl"
 
 class LBM:
     def __init__(self, config):
+        # Check if the config is a Config object
+        if isinstance(config, Config):
+            config = config.get()
         # Set configuration
         self.config = config
         self.initial_time = perf_counter()
@@ -48,16 +51,16 @@ class LBM:
         else:
             raise ValueError(f"Unknown velocity set: {self.velocities_set}")
 
-        # Initialize arrays
-        self.f = np.ones((self.Nx, self.Ny, self.Nz, self.Q), dtype=self.dtype)
-        self.rho = np.ones((self.Nx, self.Ny, self.Nz), dtype=self.dtype)
-        self.u = np.zeros((self.Nx, self.Ny, self.Nz, self.D), dtype=self.dtype)
-        self.flags = np.zeros((self.Nx, self.Ny, self.Nz), dtype=np.int32)  # All cells are fluid cells
+        # Initialize arrays (flattened)
+        self.f = np.ones((self.N, self.Q), dtype=self.dtype)
+        self.rho = np.ones(self.N, dtype=self.dtype)
+        self.u = np.zeros((self.N, self.D), dtype=self.dtype)
+        self.flags = np.zeros((self.N, self.Q), dtype=np.int32)  # All cells are fluid cells
     
         self.initializeOpenCL() # Initialize OpenCL device
         self.initializeOpenCLKernels()  # Initialize OpenCL kernels
         print("LBM initialized successfully.")
-        
+
     def run(self, timesteps):
         # Initialize OpenCL Buffers
         self.initializeBuffers()

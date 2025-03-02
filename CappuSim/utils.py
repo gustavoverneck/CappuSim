@@ -1,5 +1,10 @@
 # config.py
 
+# Imports
+import numpy as np
+
+# --------------------------------------------------------------------------------------------
+
 available_velocities_sets = ['D2Q9', 'D3Q15', 'D3Q19']   # Add D3Q15 and D3Q27 in the future
 avilable_simtypes = ['fluid']                       # Add plasma in the future
 available_color_schemes = ["grays", "hot", "cool", "viridis", "inferno", "plasma", "magma", "cividis", "jet", "turbo", "RdYlBu", "blues"]
@@ -204,3 +209,256 @@ flags_dict = {
     'solid': 1,
     'equilibrium': 2
     }
+
+# --------------------------------------------------------------------------------------------
+def unflatten(array: np.ndarray, shape: tuple) -> np.ndarray:
+    """
+    Unflattens a 1D array into a multi-dimensional array with the specified shape.
+    
+    Parameters:
+        array (np.ndarray): The 1D array to unflatten.
+        shape (tuple): The shape to unflatten the array into.
+        
+    Returns:
+        np.ndarray: The unflattened multi-dimensional array.
+    """
+    return np.reshape(array, shape)
+
+def xyz(n: int, shape: tuple) -> tuple:
+    """
+    Returns the x, y, z coordinates of index n in an array with the specified shape.
+    
+    Parameters:
+        n (int): The index in the flattened array.
+        shape (tuple): The shape of the multi-dimensional array.
+        
+    Returns:
+        tuple: The (x, y, z) coordinates corresponding to the index n.
+    """
+    z = n // (shape[0] * shape[1])
+    y = (n % (shape[0] * shape[1])) // shape[0]
+    x = n % shape[0]
+    return x, y, z
+
+# --------------------------------------------------------------------------------------------
+# Transpiler
+
+import ast
+import inspect
+import textwrap
+
+class PyClTranspiler(ast.NodeVisitor):
+    def __init__(self):
+        self.opencl_code = []
+        self.indent_level = 0
+
+    def visit_Module(self, node):
+        # Start the OpenCL kernel with the standard header
+        self.opencl_code.append("__kernel void initial_conditions(")
+        self.opencl_code.append("    __global float* rho, __global float* u, __global int* flags, int Nx, int Ny, int Nz")
+        self.opencl_code.append(") {")
+        self.opencl_code.append("    int x = get_global_id(0);")
+        self.opencl_code.append("    int y = get_global_id(1);")
+        self.opencl_code.append("    int z = get_global_id(2);")
+        self.opencl_code.append("")
+        self.opencl_code.append("    if (x >= Nx || y >= Ny || z >= Nz) return;")
+        self.opencl_code.append("")
+        self.opencl_code.append("    int n = x * Ny * Nz + y * Nz + z;")
+        self.indent_level += 1
+
+        # Visit all statements in the module (skip the first row)
+        for stmt in node.body:
+            self.visit(stmt)
+
+        # End the OpenCL kernel
+        self.indent_level -= 1
+        self.opencl_code.append("}")
+
+    def visit_For(self, node):
+        # Translate a for loop into OpenCL grid iteration
+        if isinstance(node.iter, ast.Call) and isinstance(node.iter.func, ast.Name) and node.iter.func.id == "range":
+            loop_var = node.target.id
+            self.opencl_code.append(f"{'    ' * self.indent_level}int {loop_var} = get_global_id({loop_var});")
+        else:
+            raise NotImplementedError("Only range-based for loops are supported.")
+
+        # Visit the body of the loop
+        self.indent_level += 1
+        for stmt in node.body:
+            self.visit(stmt)
+        self.indent_level -= 1
+
+    def visit_If(self, node):
+        # Translate the if condition
+        condition = self.visit(node.test)
+        self.opencl_code.append(f"{'    ' * self.indent_level}if ({condition}) {{")
+        self.indent_level += 1
+
+        # Visit the body of the if statement
+        for stmt in node.body:
+            self.visit(stmt)
+        self.indent_level -= 1
+        self.opencl_code.append(f"{'    ' * self.indent_level}}}")
+
+        # Handle elif and else clauses
+        if node.orelse:
+            if isinstance(node.orelse[0], ast.If):
+                # Process elif clauses
+                for elif_clause in node.orelse:
+                    self.visit(elif_clause)
+            else:
+                # Process else clause
+                self.opencl_code.append(f"{'    ' * self.indent_level}else {{")
+                self.indent_level += 1
+                for stmt in node.orelse:
+                    self.visit(stmt)
+                self.indent_level -= 1
+                self.opencl_code.append(f"{'    ' * self.indent_level}}}")
+
+    def visit_Compare(self, node):
+        # Translate a comparison (e.g., x == 0)
+        left = self.visit(node.left)
+        op = self.visit(node.ops[0])
+        right = self.visit(node.comparators[0])
+        return f"{left} {op} {right}"
+
+    def visit_Eq(self, node):
+        return "=="
+
+    def visit_Name(self, node):
+        # Translate variable names
+        return node.id
+
+    def visit_Constant(self, node):
+        # Translate constants
+        return str(node.value)
+
+    def visit_Assign(self, node):
+        # Translate variable assignments    
+        target = self.visit(node.targets[0])
+        value = self.visit(node.value)
+        self.opencl_code.append(f"{'    ' * self.indent_level}{target} = {value};")
+
+    def visit_Subscript(self, node):
+        # Collect all nested indices (e.g., u[1] -> indices = [1])
+        indices = []
+        current_node = node
+        while isinstance(current_node, ast.Subscript):
+            # Extract the index from the subscript
+            if isinstance(current_node.slice, ast.Index):
+                index_node = current_node.slice.value  # Python <3.9
+            else:
+                index_node = current_node.slice  # Python >=3.9
+
+            # Handle tuple indices (e.g., [x, y])
+            if isinstance(index_node, ast.Tuple):
+                indices.insert(0, [self.visit(e) for e in index_node.elts])
+            else:
+                indices.insert(0, self.visit(index_node))
+            
+            current_node = current_node.value  # Move to the parent node
+
+        # Get the array name (e.g., 'u', 'rho')
+        array_name = self.visit(current_node)
+
+        # Flatten indices based on array type
+        if array_name == 'u':
+            # 4D array: u[component]
+            if len(indices) != 1:
+                raise ValueError(f"Array 'u' requires 1 indices (component). Got: {indices}")
+            comp = int(indices[0])
+            flat = f"n + {comp}"
+        elif array_name in ('rho', 'flags'):
+            # 3D array: rho
+            if len(indices) != 0:
+                raise ValueError(f"Array '{array_name}' requires 3 indices (x, y, z). Got: {indices}")
+            flat = f"n"
+        else:
+            raise ValueError(f"Unsupported array: {array_name}")
+
+        return f"{array_name}[{flat}]"
+
+    def visit_Index(self, node):
+        # Translate array indices
+        return self.visit(node.value)
+
+    def visit_Tuple(self, node):
+        # Translate tuples (e.g., (x, y, z))
+        elements = [self.visit(e) for e in node.elts]
+        return ", ".join(elements)
+
+    def translate(self, python_code):
+        # Parse the Python code into an AST
+        tree = ast.parse(python_code)
+
+        # Visit the AST and generate OpenCL code
+        self.visit(tree)
+        return "\n".join(self.opencl_code)
+
+
+def py_to_cl(python_function):
+    """
+    Translates a Python function into an OpenCL kernel.
+
+    Args:
+        python_function: The Python function to be translated.
+
+    Returns:
+        str: The generated OpenCL kernel code.
+    """
+    # Get the source code of the Python function
+    source_code = inspect.getsource(python_function)
+
+    # Skip the first row (function definition)
+    source_code = "\n".join(source_code.splitlines()[1:])
+
+    # Dedent the remaining code to remove the function's indentation
+    source_code = textwrap.dedent(source_code)
+
+    # Create a translator instance
+    translator = PyClTranspiler()
+
+    # Translate the Python code to OpenCL
+    opencl_code = translator.translate(source_code)
+    return opencl_code
+
+# --------------------------------------------------------------------------------------------
+
+def test_transpiller():
+    # Example Python function
+    def set_initial_conditions(x, y, z, rho, u, flags, Nx, Ny, Nz):
+        if x == 0:
+            rho = 1.0
+        elif (y ==  6):
+            u[1] = 0.0
+        else:
+            flags = 1
+    # Example usage
+    print("Original Python function:\n")
+    print(inspect.getsource(set_initial_conditions))
+    print("\nTranspiled function:\n")
+    # Translate the Python function to OpenCL
+    opencl_code = py_to_cl(set_initial_conditions)
+    print(opencl_code)
+    
+    # Testing the translation
+    import pyopencl as cl
+    import numpy as np
+    cl.ctx = cl.create_some_context()
+    cl.queue = cl.CommandQueue(cl.ctx)
+    Nx, Ny, Nz = 10, 10, 10
+    # Initialize arrays
+    rho = np.zeros((Nx, Ny, Nz), dtype=np.float32)
+    u = np.zeros((Nx, Ny, Nz, 3), dtype=np.float32)
+    flags = np.zeros((Nx, Ny, Nz), dtype=np.int32)
+    # Create OpenCL buffers
+    rho_buffer = cl.Buffer(cl.ctx, cl.mem_flags.READ_WRITE | cl.mem_flags.COPY_HOST_PTR, hostbuf=rho)
+    u_buffer = cl.Buffer(cl.ctx, cl.mem_flags.READ_WRITE | cl.mem_flags.COPY_HOST_PTR, hostbuf=u)
+    flags_buffer = cl.Buffer(cl.ctx, cl.mem_flags.READ_WRITE | cl.mem_flags.COPY_HOST_PTR, hostbuf=flags)
+    # Start the OpenCL kernel
+    kernel_code = py_to_cl(set_initial_conditions)
+    program = cl.Program(cl.ctx, kernel_code).build()
+    # Run the kernel
+    program.initial_conditions(cl.queue, (Nx, Ny, Nz), None, rho_buffer, u_buffer, flags_buffer, np.int32(Nx), np.int32(Ny), np.int32(Nz))
+    cl.enqueue_copy(cl.queue, rho.data, rho)
+    print(rho)
