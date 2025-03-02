@@ -5,14 +5,14 @@ import pyopencl as cl
 import pyopencl.tools
 import numpy as np
 from time import perf_counter
-import os
+from os import path
 from tqdm import tqdm
-import subprocess
 
 # Internal Imports
-from .config import velocities_sets
+from .utils import velocities_sets
+from .translator import py_to_cl
 
-lib_dir = os.path.dirname(__file__)
+lib_dir = path.dirname(__file__)
 stream_collide_kernel = lib_dir + r"\stream_collide_kernel.cl"
 
 class LBM:
@@ -52,13 +52,14 @@ class LBM:
         self.f = np.ones((self.Nx, self.Ny, self.Nz, self.Q), dtype=self.dtype)
         self.rho = np.ones((self.Nx, self.Ny, self.Nz), dtype=self.dtype)
         self.u = np.zeros((self.Nx, self.Ny, self.Nz, self.D), dtype=self.dtype)
+        self.flags = np.zeros((self.Nx, self.Ny, self.Nz), dtype=np.int32)  # All cells are fluid cells
     
+        self.initializeOpenCL() # Initialize OpenCL device
+        self.initializeOpenCLKernels()  # Initialize OpenCL kernels
         print("LBM initialized successfully.")
         
     def run(self, timesteps):
-        # Initialize OpenCL devices and kernels
-        self.initializeOpenCL()
-        self.initializeOpenCLKernels()
+        # Initialize OpenCL Buffers
         self.initializeBuffers()
         
         # Run the simulation for a given number of timesteps
@@ -86,29 +87,26 @@ class LBM:
                 self.dtype(self.omega), np.int32(self.Q), np.int32(self.D),
                 np.int32(self.Nx), np.int32(self.Ny), np.int32(self.Nz)
             )
-        self.queue.finish()
         print("Simulation completed successfully.")
+        #self.queue.finish()
         # End the timer
         print(f"Total execution time: {perf_counter() - self.start_time:.2f} seconds.")
+        return
     
-    def setInitialConditions(self, func, target=None):
-        if target is None:
-            raise ValueError("Target array must be provided")
-
-        if target == 'rho':
-            self.rho = np.fromfunction(lambda i, j, k: func(i, j, k), (self.Nx, self.Ny, self.Nz), dtype=self.dtype)
-        elif target == 'u':
-            # Create an empty array with an extra dimension for velocity components
-            self.u = np.empty((self.Nx, self.Ny, self.Nz, self.D), dtype=self.dtype)
-            for d in range(self.D):
-                # For each velocity component, fill the grid by selecting the d-th element from func's output
-                self.u[:, :, :, d] = np.fromfunction(lambda i, j, k, d=d: func(i, j, k)[d], (self.Nx, self.Ny, self.Nz), dtype=self.dtype)
-        elif target == 'T' and self.use_temperature:
-            self.T = np.fromfunction(lambda i, j, k: func(i, j, k), (self.Nx, self.Ny, self.Nz), dtype=self.dtype)
-        elif target == 'flags':
-            self.flags = np.fromfunction(lambda i, j, k: func(i, j, k), (self.Nx, self.Ny, self.Nz), dtype=np.int32)
-        else:
-            raise ValueError("Unknown target array")
+    def setInitialConditions(self, func):
+        self.initializeBuffers()    # Initialize OpenCL Buffers
+        initial_conditions_kernel = py_to_cl(func)  # Translate Python function to OpenCL kernel
+        print(initial_conditions_kernel)    # Debugging
+        self.program_IC = cl.Program(self.ctx, initial_conditions_kernel).build()    # Compile the kernel
+        self.program_IC.initial_conditions(    
+            self.queue, (self.Nx, self.Ny, self.Nz), None,
+            self.rho_buf, self.u_buf, self.flags_buf,
+            np.int32(self.Nx), np.int32(self.Ny), np.int32(self.Nz)
+        ) # Run the kernel
+        # Transfer the results back to the host
+        cl.enqueue_copy(self.queue, self.u, self.u_buf)
+        cl.enqueue_copy(self.queue, self.rho, self.rho_buf)
+        cl.enqueue_copy(self.queue, self.flags, self.flags_buf)
 
     def get_results(self):
         cl.enqueue_copy(self.queue, self.rho, self.rho_buf)
@@ -147,6 +145,7 @@ class LBM:
         self.u_buf = cl.Buffer(self.ctx, self.mf.READ_WRITE | self.mf.COPY_HOST_PTR, hostbuf=self.u)
         self.c_buf = cl.Buffer(self.ctx, self.mf.READ_ONLY | self.mf.COPY_HOST_PTR, hostbuf=self.c)
         self.w_buf = cl.Buffer(self.ctx, self.mf.READ_ONLY | self.mf.COPY_HOST_PTR, hostbuf=self.w)
+        self.flags_buf = cl.Buffer(self.ctx, self.mf.READ_ONLY | self.mf.COPY_HOST_PTR, hostbuf=self.flags)
     
     def select_dtype(self):
         # Select the appropriate data type based on the simulation type
@@ -180,3 +179,6 @@ class LBM:
         # Print VRAM usage
         print(f"Total VRAM: {total_vram / (1024 ** 2):.2f} MB")
         print(f"CappuSim used VRAM: {used_by_code / (1024 ** 2):.2f} MB ({used_by_code_percent:.2f}%)")
+    
+    def importSTL(self, filename):
+        pass
