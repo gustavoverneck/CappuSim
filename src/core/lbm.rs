@@ -12,6 +12,7 @@ use crate::utils::ocl_utils;
 use crate::utils::terminal_utils;
 use crate::utils::lbm_velocity_sets;
 
+
 #[derive(Debug, Clone, Copy)]
 pub struct Velocity {
     pub x: f32,
@@ -30,35 +31,39 @@ impl Velocity {
 }
 
 pub struct LBM {
-    pub Nx: usize,
-    pub Ny: usize,
-    pub Nz: usize,
-    pub N: usize,
+    pub Nx: u64,
+    pub Ny: u64,
+    pub Nz: u64,
+    pub N: u64,
     pub model: String,
     pub viscosity: f32,
-    pub time_steps: usize,
+    pub time_steps: u64,
     pub density: Vec<f32>,
     pub velocity: Vec<Velocity>,
     pub flags: Vec<u32>,
+    pub c: Vec<Vec<i32>>,
+    pub w: Vec<f32>,
     context: Option<Context>,
     queue: Option<Queue>,
     buffer: Option<Buffer<f32>>,
 }
 
 impl LBM {
-    pub fn new(Nx: usize, Ny: usize, Nz: usize, model: String, viscosity: f32) -> Self {
+    pub fn new(Nx: u64, Ny: u64, Nz: u64, model: String, viscosity: f32) -> Self {
         let size = Nx * Ny * Nz;
         LBM {
-            Nx,
-            Ny,
-            Nz,
+            Nx: Nx,
+            Ny: Ny,
+            Nz: Nz,
             N: size,
-            model,
-            viscosity,
+            model: model,
+            viscosity: viscosity,
             time_steps: 0,
-            density: vec![1.0; size],   // Initialize density to 1.0
-            velocity: vec![Velocity::zero(); size], // Initialize velocity to zero
-            flags: vec![0; size],       // Initialize flags to 0 (fluid)
+            density: vec![1.0; size as usize],   // Initialize density to 1.0
+            velocity: vec![Velocity::zero(); size as usize], // Initialize velocity to zero
+            flags: vec![0; size as usize],       // Initialize flags to 0 (fluid)
+            c: vec![],                  // Velocity vectors (to be filled based on model)
+            w: vec![],                  // Weights (to be filled based on model)
             context: None,
             queue: None,
             buffer: None,
@@ -84,11 +89,22 @@ impl LBM {
 
                 self.buffer = Some(buffer);
 
-                println!("OpenCL initialized and buffer created successfully!");
+                terminal_utils::print_opencl_success();
             }
             Err(e) => {
                 eprintln!("Failed to initialize OpenCL: {}", e);
             }
+        }
+    }
+
+    pub fn get_velocity_set(&mut self) -> Option<lbm_velocity_sets::VelocitySet> {
+        let vel_set = lbm_velocity_sets::get_velocity_set(&self.model);
+        if let Some(vel_set) = vel_set {
+            self.c = vel_set.c.clone();
+            self.w = vel_set.w.clone();
+            Some(vel_set)
+        } else {
+            None
         }
     }
 
@@ -110,24 +126,26 @@ impl LBM {
         // Apply boundary conditions logic
     }
 
-    pub fn run(&mut self, time_steps: usize) {
-        self.time_steps = time_steps;
-        
+    pub fn run(&mut self, time_steps: u64) {
+        // Print LatteLab welcome message
+        terminal_utils::print_welcome_message();
+        self.time_steps = time_steps as u64;
+        println!("{}", "-".repeat(72));
         // Initialize OpenCL
         self.initialize_ocl();
-        
+        terminal_utils::print_yellow_name();
         // Create a progress bar
-        let pb = ProgressBar::new(self.time_steps as u64);
+        let pb = ProgressBar::new(self.time_steps);
 
         // Customize the progress bar style (optional)
         pb.set_style(
             ProgressStyle::default_bar()
-                .template("{spinner:.green} [{wide_bar:.cyan/blue}] {pos}/{len} ({eta})")
-                .unwrap()
-                .progress_chars("=> "),
+            .template("{spinner:.green} [{bar:55.cyan/blue}] {pos}/{len} ({eta})")
+            .unwrap()
+            .progress_chars("=> "),
         );
 
-         // Start timing
+        // Start timing
         let start_time = Instant::now();
 
         // Simulate work by iterating and updating the progress bar -> REMOVE
@@ -135,7 +153,7 @@ impl LBM {
             self.update();
             // Call OpenCL kernels for collision and streaming
             // Example: self.queue.enqueue_kernel(&self.kernel_collision, &self.buffer);
-            thread::sleep(Duration::from_millis(50)); // Simulate work
+            thread::sleep(Duration::from_millis(5)); // Simulate work
             pb.inc(1); // Increment the progress bar by 1
         }
 
@@ -147,11 +165,12 @@ impl LBM {
         let elapsed_seconds = elapsed_time.as_secs_f64();
 
         // Calculate MLUps
-        let mlups = (self.N as f64 * self.time_steps as f64) / elapsed_seconds / 1_000_000.0;
+        let mlups = (self.N as f64 * self.time_steps as f64) / elapsed_seconds / 1_000_000.0;   // Performance in Million Lattice Updates per Second (MLUps)
 
-        // Print metrics
-        println!("Performance: (MLUps): {:.2}", mlups);
-        println!("Total execution time: {:.2} seconds", elapsed_seconds);
-        
+        terminal_utils::print_metrics(
+            self.time_steps,
+            elapsed_seconds,
+            mlups,
+        );
     }
 }

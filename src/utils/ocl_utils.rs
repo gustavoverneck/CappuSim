@@ -25,6 +25,6 @@ pub fn setup_opencl() -> Result<(Platform, Device, Context, Queue), Error> {
     // Create a command queue
     let queue = Queue::new(&context, device.clone(), None)?;
 
-    println!("OpenCL device and context initialized successfully!");
+    //println!("OpenCL device and context initialized successfully!");
     Ok((platform, device, context, queue))
 }

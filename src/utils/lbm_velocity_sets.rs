@@ -1,17 +1,17 @@
 // src/utils/lbm_velocity_sets.rs
 
 #[derive(Debug)]
-struct VelocitySet {
-    c: Vec<Vec<i32>>, // Velocity vectors
-    w: Vec<f64>,      // Weights
+pub struct VelocitySet {
+    pub c: Vec<Vec<i32>>, // Velocity vectors
+    pub w: Vec<f32>,      // Weights
 }
 
-fn get_velocity_set(set_name: &str) -> Option<VelocitySet> {
+pub fn get_velocity_set(set_name: &str) -> Option<VelocitySet> {
     match set_name {
         "D2Q9" => Some(VelocitySet {
             c: vec![
-                vec![0, 0], vec![1, 0], vec![-1, 0], vec![0, 1], vec![0, -1],
-                vec![1, 1], vec![-1, -1], vec![1, -1], vec![-1, 1],
+                vec![0, 0, 0], vec![1, 0, 0], vec![-1, 0, 0], vec![0, 1, 0], vec![0, -1, 0],
+                vec![1, 1, 0], vec![-1, -1, 0], vec![1, -1, 0], vec![-1, 1, 0],
             ],
             w: vec![
                 4.0 / 9.0, 1.0 / 9.0, 1.0 / 9.0, 1.0 / 9.0, 1.0 / 9.0,
@@ -76,14 +76,3 @@ fn get_velocity_set(set_name: &str) -> Option<VelocitySet> {
     }
 }
 
-fn main() {
-    let set_name = "D2Q9"; // Example: Select D2Q9
-    match get_velocity_set(set_name) {
-        Some(velocity_set) => {
-            println!("Selected velocity set: {}", set_name);
-            println!("Velocity vectors: {:?}", velocity_set.c);
-            println!("Weights: {:?}", velocity_set.w);
-        }
-        None => println!("Unknown velocity set: {}", set_name),
-    }
-}
