@@ -1,16 +1,13 @@
 use colored::*;
 
-// Print an ERROR message with a prefix in bold red.
-pub fn print_error(message: &str) {
-    println!("{}: {}", "[ERROR]".red().bold(), message);
-}
-
 // Print a WARNING message with a prefix in bold yellow.
+#[allow(dead_code)]
 pub fn print_warning(message: &str) {
     println!("{}: {}", "[WARNING]".yellow().bold(), message);
 }
 
 // Print a simple LOG message with a prefix in bold white.
+#[allow(dead_code)]
 pub fn print_log(message: &str) {
     println!("{}: {}", "[LOG]".white().bold(), message);
 }
@@ -18,6 +15,12 @@ pub fn print_log(message: &str) {
 // Print a SUCCESS message with a prefix in bold green.
 pub fn print_success(message: &str) {
     println!("{}: {}", "[SUCCESS]".green().bold(), message);
+}
+
+// Print an ERROR message with a prefix in bold red.
+#[allow(dead_code)]
+pub fn print_error(message: &str) {
+    println!("{}: {}", "[ERROR]".red().bold(), message);
 }
 
 // Print LatteLab welcome message
@@ -44,9 +47,9 @@ pub fn print_metrics(time_steps: u64, elapsed_time: f64, mlups: f64) {
     let seconds = seconds % 60.0;
     println!("\n");
     println!("{}", "-".repeat(72));
-    println!("{}", "Done!".green().bold());
+    print_success("Simulation finished successfully!"); 
     println!(
-        "Elapsed time: {}d {}h {}m {:.2 }s",
+        "Elapsed time: {}d {}h {}m {:.3 }s",
         days,
         hours,
         minutes,
@@ -56,11 +59,6 @@ pub fn print_metrics(time_steps: u64, elapsed_time: f64, mlups: f64) {
     println!("{}: {:.2} MLUps\n", "Performance".white().bold(), mlups);
 }
 
-
-pub fn print_opencl_success() {
-    println!("{}", "OpenCL device and context initialized successfully!");
-}
-
-pub fn print_yellow_name() {
+pub fn print_name() {
     println!("\n{}", "LatteLab".bold().blue());
 }

@@ -1,34 +1,20 @@
 // src/core/lbm.rs
 
-#[allow(unused)]
-use ocl::{Buffer, Kernel, Context, Queue};
+#![allow(unused)]           // Allow unused imports and warnings
+#![allow(non_snake_case)]   // Allow non-snake_case naming convention
+use ocl::{Platform, Device, Context, Queue, ProQue, Buffer, Kernel};
+use ocl::enums::DeviceInfo;
+use std::error::Error;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::thread;
 use std::time::{Duration, Instant};
+use std::fs::File;
+use std::io::{self, Write, BufWriter};
+use std::path::Path;
 
-
-use crate::core::kernels;
-use crate::utils::ocl_utils;
 use crate::utils::terminal_utils;
-use crate::utils::lbm_velocity_sets;
-
-
-#[derive(Debug, Clone, Copy)]
-pub struct Velocity {
-    pub x: f32,
-    pub y: f32,
-    pub z: f32,
-}
-
-impl Velocity {
-    pub fn new(x: f32, y: f32, z: f32) -> Self {
-        Velocity { x, y, z }
-    }
-    
-    pub fn zero() -> Self {
-        Velocity { x: 0.0, y: 0.0, z: 0.0 }
-    }
-}
+use crate::utils::velocity::{Velocity};
+use crate::core::kernels::LBM_KERNEL;
 
 pub struct LBM {
     pub Nx: u64,
@@ -39,91 +25,218 @@ pub struct LBM {
     pub viscosity: f32,
     pub time_steps: u64,
     pub density: Vec<f32>,
-    pub velocity: Vec<Velocity>,
-    pub flags: Vec<u32>,
-    pub c: Vec<Vec<i32>>,
-    pub w: Vec<f32>,
+    pub u: Vec<Velocity>,
+    pub flags: Vec<u8>,
     context: Option<Context>,
     queue: Option<Queue>,
-    buffer: Option<Buffer<f32>>,
+    pro_que: Option<ProQue>,
+    density_buffer: Option<Buffer<f32>>,
+    velocity_buffer: Option<Buffer<f32>>,
+    flags_buffer: Option<Buffer<u8>>,
+    streaming_kernel: Option<Kernel>,
+    collision_kernel: Option<Kernel>,
+    found_errors: bool,
 }
 
 impl LBM {
     pub fn new(Nx: u64, Ny: u64, Nz: u64, model: String, viscosity: f32) -> Self {
         let size = Nx * Ny * Nz;
         LBM {
-            Nx: Nx,
-            Ny: Ny,
-            Nz: Nz,
+            Nx,
+            Ny,
+            Nz,
             N: size,
-            model: model,
-            viscosity: viscosity,
+            model,
+            viscosity,
             time_steps: 0,
             density: vec![1.0; size as usize],   // Initialize density to 1.0
-            velocity: vec![Velocity::zero(); size as usize], // Initialize velocity to zero
+            u: vec![Velocity::zero(); size as usize], // Initialize velocity to zero
             flags: vec![0; size as usize],       // Initialize flags to 0 (fluid)
-            c: vec![],                  // Velocity vectors (to be filled based on model)
-            w: vec![],                  // Weights (to be filled based on model)
             context: None,
             queue: None,
-            buffer: None,
+            pro_que: None,
+            density_buffer: None,
+            velocity_buffer: None,
+            flags_buffer: None,
+            streaming_kernel: None,
+            collision_kernel: None,
+            found_errors: false,
         }
     }
 
-    // Initialize OpenCL and store resources in the Lbm object
-    fn initialize_ocl(&mut self) {
-        // Initialize OpenCL
-        match ocl_utils::setup_opencl() {
-            Ok((_platform, _device, context, queue)) => {
-                // Store the context and queue in the Lbm object
-                self.context = Some(context);
-                self.queue = Some(queue.clone());
+    // Initialize OpenCL and store resources in the LBM object
+    fn initialize_ocl(&mut self) -> Result<(), Box<dyn Error>> {
+        // Step 1: Get the first available platform
+        let platform = Platform::list().into_iter().next().ok_or("Platform not found")?;
+        println!("Platform: {}", platform.name()?);
 
-                // Create a buffer and store it in the Lbm object
-                let buffer = ocl::Buffer::<f32>::builder()
-                    .queue(queue)
-                    .len(1024)
-                    .fill_val(0.0f32)
-                    .build()
-                    .expect("Failed to create buffer");
+        // Step 2: Get the first available device
+        let device = Device::list_all(&platform)?
+            .into_iter()
+            .next()
+            .ok_or("Device not found")?;
+        println!("Device: {}", device.name()?);
 
-                self.buffer = Some(buffer);
+        // Step 3: Create a context and command queue
+        let context = Context::builder()
+            .platform(platform)
+            .devices(device.clone())
+            .build()?;
 
-                terminal_utils::print_opencl_success();
+        let queue = Queue::new(&context, device, None)?;
+
+        // Step 4: Compile the OpenCL kernel
+        let kernel_source = match self.model.as_str() {
+            "D2Q9" => format!("#define D2Q9\n{}", LBM_KERNEL),
+            "D3Q7" => format!("#define D3Q7\n{}", LBM_KERNEL),
+            "D3Q15" => format!("#define D3Q15\n{}", LBM_KERNEL),
+            "D3Q19" => format!("#define D3Q19\n{}", LBM_KERNEL),
+            "D3Q27" => format!("#define D3Q27\n{}", LBM_KERNEL),
+            _ => return Err("Unsupported model".into()),
+        };
+        let pro_que = ProQue::builder()
+        .context(context.clone())
+        .src(kernel_source)
+        .build()
+        .map_err(|e| { eprintln!("OpenCL kernel compilation failed: {}", e);e })?;
+
+        // Step 5: Create OpenCL buffers
+        let density_buffer = pro_que.create_buffer::<f32>()?;
+        let velocity_buffer = pro_que.create_buffer::<f32>()?;
+        let flags_buffer = pro_que.create_buffer::<u8>()?;
+
+        // Step 6: Store resources in the LBM struct
+        self.context = Some(context);
+        self.queue = Some(queue);
+        self.pro_que = Some(pro_que);
+        self.density_buffer = Some(density_buffer);
+        self.velocity_buffer = Some(velocity_buffer);
+        self.flags_buffer = Some(flags_buffer);
+
+        // Step 7: Create and store the kernels
+        self.streaming_kernel = Some(self.pro_que.as_ref().unwrap().kernel_builder("streaming_kernel")
+            .arg(self.density_buffer.as_ref().unwrap()) // Dereference the double reference
+            .arg(self.velocity_buffer.as_ref().unwrap()) // Dereference the double reference
+            .arg(self.Nx as i32)
+            .arg(self.Ny as i32)
+            .arg(self.Nz as i32)
+            .build()?);
+
+        self.collision_kernel = Some(self.pro_que.as_ref().unwrap().kernel_builder("collision_kernel")
+            .arg(self.density_buffer.as_ref().unwrap()) // Dereference the double reference
+            .arg(self.Nx as i32)
+            .arg(self.Ny as i32)
+            .arg(self.Nz as i32)
+            .arg(1.0 / self.viscosity) // omega = 1 / tau
+            .build()?);
+
+        terminal_utils::print_success("OpenCL device and context initialized successfully!");
+        Ok(())
+    }
+
+    pub fn check_errors_in_input(&mut self) -> Result<(), Box<dyn Error>> {
+        // Check if the dimensions are positive
+        if self.Nx == 0 || self.Ny == 0 || self.Nz == 0 {
+            self.found_errors = true;
+            return Err("Dimensions Nx, Ny, and Nz must be greater than 0.".into());
+        }
+
+        // Check if the model is supported
+        let supported_models = ["D2Q9", "D3Q7", "D3Q15", "D3Q19", "D3Q27"];
+        if !supported_models.contains(&self.model.as_str()) {
+            self.found_errors = true;
+            return Err(format!("Unsupported model: {}.", self.model).into());
+        }
+
+        // Check if D2Q9 model is used with Nz != 0
+        if self.model == "D2Q9" && self.Nz != 1 {
+            self.found_errors = true;
+            return Err("D2Q9 model should have Nz equal to 1.".into());
+        }
+
+        // Check if viscosity is positive
+        if self.viscosity <= 0.0 {
+            self.found_errors = true;
+            return Err("Viscosity must be greater than 0.".into());
+        }
+
+        // Check if density and velocity vectors have the correct length
+        let expected_size = (self.Nx * self.Ny * self.Nz) as usize;
+        if self.density.len() != expected_size {
+            self.found_errors = true;
+            return Err("Density vector has incorrect length.".into());
+        }
+        if self.u.len() != expected_size {
+            self.found_errors = true;
+            return Err("Velocity vector has incorrect length.".into());
+        }
+        if self.flags.len() != expected_size {
+            self.found_errors = true;
+            return Err("Flags vector has incorrect length.".into());
+        }
+
+        // Check if OpenCL queue is available
+        if let Some(queue) = &self.queue {
+            if let Err(err) = queue.finish() {
+                self.found_errors = true;
+                return Err(format!("OpenCL queue error: {}", err).into());
             }
-            Err(e) => {
-                eprintln!("Failed to initialize OpenCL: {}", e);
-            }
         }
+
+        Ok(())
     }
 
-    pub fn get_velocity_set(&mut self) -> Option<lbm_velocity_sets::VelocitySet> {
-        let vel_set = lbm_velocity_sets::get_velocity_set(&self.model);
-        if let Some(vel_set) = vel_set {
-            self.c = vel_set.c.clone();
-            self.w = vel_set.w.clone();
-            Some(vel_set)
-        } else {
-            None
+    pub fn set_conditions<F>(&mut self, f: F)
+    where
+        F: Fn(&mut LBM, usize, usize, usize, usize),
+    {
+        for n in 0..self.N as usize {
+            // Get the x, y, z coordinates from the linear index n
+            let (x, y, z) = xyz_from_n(n, self.Nx, self.Ny);
+            // Call the user-defined lambda function
+            f(self, x as usize, y as usize, z as usize, n);
         }
-    }
-
-    pub fn update(&mut self) {
-        self.collide();
-        self.stream();
-        self.apply_boundary_conditions();
     }
 
     pub fn collide(&mut self) {
-        // Apply collision logic
+        if let Some(kernel) = &self.collision_kernel {
+            unsafe {
+                kernel.enq().expect("Failed to enqueue collision kernel");
+            }
+        }
     }
 
     pub fn stream(&mut self) {
-        // Streaming logic
+        if let Some(kernel) = &self.streaming_kernel {
+            unsafe {
+                kernel.enq().expect("Failed to enqueue streaming kernel");
+            }
+        }
     }
 
-    pub fn apply_boundary_conditions(&mut self) {
-        // Apply boundary conditions logic
+    // Read data from GPU to CPU
+    fn read_from_gpu(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        // Read density buffer
+        if let Some(buffer) = &self.density_buffer {
+            buffer.read(&mut self.density).enq()?;
+        }
+    
+        // Read velocity buffer
+        if let Some(buffer) = &self.velocity_buffer {
+            // Create a temporary vector to hold the flat f32 data
+            let mut velocity_data_flat = vec![0.0; self.N as usize * 3]; // 3 components per velocity vector
+    
+            // Read the flat data from the GPU buffer
+            buffer.read(&mut velocity_data_flat).enq()?;
+    
+            // Convert the flat data into a Vec<Velocity>
+            self.u = velocity_data_flat
+                .chunks(3) // Split into chunks of 3 (x, y, z components)
+                .map(|chunk| Velocity::new(chunk[0], chunk[1], chunk[2]))
+                .collect();
+        }
+    
+        Ok(())
     }
 
     pub fn run(&mut self, time_steps: u64) {
@@ -131,9 +244,18 @@ impl LBM {
         terminal_utils::print_welcome_message();
         self.time_steps = time_steps as u64;
         println!("{}", "-".repeat(72));
+
+        // Check for errors in input parameters
+        if let Err(err) = self.check_errors_in_input() {
+            terminal_utils::print_error(&format!("Error: {}", err));
+            
+            return;
+        }
+
         // Initialize OpenCL
         self.initialize_ocl();
-        terminal_utils::print_yellow_name();
+        terminal_utils::print_name();
+        
         // Create a progress bar
         let pb = ProgressBar::new(self.time_steps);
 
@@ -148,14 +270,15 @@ impl LBM {
         // Start timing
         let start_time = Instant::now();
 
-        // Simulate work by iterating and updating the progress bar -> REMOVE
-        for _ in 0..100 {
-            self.update();
-            // Call OpenCL kernels for collision and streaming
-            // Example: self.queue.enqueue_kernel(&self.kernel_collision, &self.buffer);
-            thread::sleep(Duration::from_millis(5)); // Simulate work
+        // Main Loop
+        for _ in 0..self.time_steps {
+            // Update the simulation state
+            self.stream();
+            self.collide();
             pb.inc(1); // Increment the progress bar by 1
         }
+        // Copy buffers from GPU to CPU
+        self.read_from_gpu().expect("Failed to read data from GPU.");
 
         // Finish the progress bar
         pb.finish_with_message("Done!");
@@ -170,7 +293,61 @@ impl LBM {
         terminal_utils::print_metrics(
             self.time_steps,
             elapsed_seconds,
-            mlups,
+            mlups,  
         );
     }
+
+    pub fn output_to(&mut self, path: &str) -> Result<(), Box<dyn std::error::Error>> {
+        if self.found_errors {
+            return Err("Errors were found in the input parameters. Cannot write output.".into());
+        }
+        // Create the file and wrap it in a BufWriter for better performance
+        let file = File::create(path)?;
+        let mut writer = BufWriter::new(file);
+    
+        // Write the header
+        writeln!(writer, "x, y, z, rho, v")?;
+    
+        // Iterate over the grid and write the data
+        for z in 0..self.Nz {
+            for y in 0..self.Ny {
+                for x in 0..self.Nx {
+                    // Calculate the linear index
+                    let index = n_from_xyz(x, y, z, self.Nx, self.Ny);
+    
+                    // Get density and velocity
+                    let rho = self.density[index];
+                    let u = &self.u[index];
+    
+                    // Calculate the absolute velocity
+                    let abs_u = (u.x.powi(2) + u.y.powi(2) + u.z.powi(2)).sqrt();
+    
+                    // Write the data to the file
+                    writeln!(
+                        writer,
+                        "{}, {}, {}, {:.6}, {:.6}", // Format floating-point numbers to 6 decimal places
+                        x, y, z, rho, abs_u
+                    )?;
+                }
+            }
+        }
+    
+        // Flush the buffer to ensure all data is written to the file
+        writer.flush()?;
+    
+        println!("Simulation results have been written to {}", path);
+        Ok(())
+    }
+}
+
+
+pub fn n_from_xyz(x: u64, y: u64, z: u64, Nx: u64, Ny: u64) -> usize {
+    (z * Ny * Nx + y * Nx + x) as usize
+}
+
+pub fn xyz_from_n(index: usize, Nx: u64, Ny: u64) -> (u64, u64, u64) {
+    let z = (index as u64) / (Ny * Nx);
+    let y = ((index as u64) % (Ny * Nx)) / Nx;
+    let x = (index as u64) % Nx;
+    (x, y, z)
 }
