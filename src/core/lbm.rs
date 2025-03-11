@@ -64,27 +64,26 @@ impl LBM {
         }
     }
 
-    // Initialize OpenCL and store resources in the LBM object
     fn initialize_ocl(&mut self) -> Result<(), Box<dyn Error>> {
         // Step 1: Get the first available platform
         let platform = Platform::list().into_iter().next().ok_or("Platform not found")?;
         println!("Platform: {}", platform.name()?);
-
+    
         // Step 2: Get the first available device
         let device = Device::list_all(&platform)?
             .into_iter()
             .next()
             .ok_or("Device not found")?;
         println!("Device: {}", device.name()?);
-
+    
         // Step 3: Create a context and command queue
         let context = Context::builder()
             .platform(platform)
             .devices(device.clone())
             .build()?;
-
+    
         let queue = Queue::new(&context, device, None)?;
-
+    
         // Step 4: Compile the OpenCL kernel
         let kernel_source = match self.model.as_str() {
             "D2Q9" => format!("#define D2Q9\n{}", LBM_KERNEL),
@@ -94,17 +93,34 @@ impl LBM {
             "D3Q27" => format!("#define D3Q27\n{}", LBM_KERNEL),
             _ => return Err("Unsupported model".into()),
         };
+    
+        // Create the ProQue object with the specified dimensions
         let pro_que = ProQue::builder()
-        .context(context.clone())
-        .src(kernel_source)
-        .build()
-        .map_err(|e| { eprintln!("OpenCL kernel compilation failed: {}", e);e })?;
+            .context(context.clone())
+            .src(kernel_source)
+            .dims((self.Nx as usize, self.Ny as usize, self.Nz as usize)) // Set the dimensions here
+            .build()
+            .map_err(|e| {
+                eprintln!("OpenCL kernel compilation failed: {}", e);
+                e
+            })?;
+    
+        // Step 5: Create OpenCL buffers with the correct size
+        let density_buffer = pro_que.buffer_builder::<f32>()
+        .len(self.density.len()) // Ensure this matches the grid size
+        .copy_host_slice(&self.density)
+        .build()?;
 
-        // Step 5: Create OpenCL buffers
-        let density_buffer = pro_que.create_buffer::<f32>()?;
-        let velocity_buffer = pro_que.create_buffer::<f32>()?;
-        let flags_buffer = pro_que.create_buffer::<u8>()?;
+        let velocity_buffer = pro_que.buffer_builder::<f32>()
+        .len(self.u.len() * 3) // Ensure this matches the grid size (3 components per velocity)
+        .copy_host_slice(&self.u.iter().flat_map(|v| vec![v.x, v.y, v.z]).collect::<Vec<f32>>())
+        .build()?;
 
+        let flags_buffer = pro_que.buffer_builder::<u8>()
+        .len(self.flags.len()) // Ensure this matches the grid size
+        .copy_host_slice(&self.flags)
+        .build()?;
+    
         // Step 6: Store resources in the LBM struct
         self.context = Some(context);
         self.queue = Some(queue);
@@ -113,17 +129,19 @@ impl LBM {
         self.velocity_buffer = Some(velocity_buffer);
         self.flags_buffer = Some(flags_buffer);
 
+        println!("VRAM usage: {:.2} MB", self.calculate_vram_usage() as f64 / (1024.0 * 1024.0));
+
         // Step 7: Create and store the kernels
         self.streaming_kernel = Some(self.pro_que.as_ref().unwrap().kernel_builder("streaming_kernel")
-            .arg(self.density_buffer.as_ref().unwrap()) // Dereference the double reference
-            .arg(self.velocity_buffer.as_ref().unwrap()) // Dereference the double reference
+            .arg(self.density_buffer.as_ref().unwrap())
+            .arg(self.velocity_buffer.as_ref().unwrap())
             .arg(self.Nx as i32)
             .arg(self.Ny as i32)
             .arg(self.Nz as i32)
             .build()?);
-
+            
         self.collision_kernel = Some(self.pro_que.as_ref().unwrap().kernel_builder("collision_kernel")
-            .arg(self.density_buffer.as_ref().unwrap()) // Dereference the double reference
+            .arg(self.density_buffer.as_ref().unwrap())
             .arg(self.Nx as i32)
             .arg(self.Ny as i32)
             .arg(self.Nz as i32)
@@ -134,6 +152,28 @@ impl LBM {
         Ok(())
     }
 
+    pub fn calculate_vram_usage(&self) -> usize {
+        // Note: Kernel size is not included in VRAM usage calculation as it cannot be easily determined
+        let mut total_vram = 0;
+
+        // Add size of density buffer
+        if let Some(buffer) = &self.density_buffer {
+            total_vram += buffer.len() * std::mem::size_of::<f32>();
+        }
+
+        // Add size of velocity buffer
+        if let Some(buffer) = &self.velocity_buffer {
+            total_vram += buffer.len() * std::mem::size_of::<f32>();
+        }
+
+        // Add size of flags buffer
+        if let Some(buffer) = &self.flags_buffer {
+            total_vram += buffer.len() * std::mem::size_of::<u8>();
+        }
+        total_vram
+    }
+
+    
     pub fn check_errors_in_input(&mut self) -> Result<(), Box<dyn Error>> {
         // Check if the dimensions are positive
         if self.Nx == 0 || self.Ny == 0 || self.Nz == 0 {
@@ -219,21 +259,22 @@ impl LBM {
         // Read density buffer
         if let Some(buffer) = &self.density_buffer {
             buffer.read(&mut self.density).enq()?;
+            //println!("Density data read from GPU.");
+        } else {
+            terminal_utils::print_error("Density buffer not found.");
         }
     
         // Read velocity buffer
         if let Some(buffer) = &self.velocity_buffer {
-            // Create a temporary vector to hold the flat f32 data
-            let mut velocity_data_flat = vec![0.0; self.N as usize * 3]; // 3 components per velocity vector
-    
-            // Read the flat data from the GPU buffer
+            let mut velocity_data_flat = vec![0.0; self.N as usize * 3];
             buffer.read(&mut velocity_data_flat).enq()?;
-    
-            // Convert the flat data into a Vec<Velocity>
             self.u = velocity_data_flat
-                .chunks(3) // Split into chunks of 3 (x, y, z components)
+                .chunks(3)
                 .map(|chunk| Velocity::new(chunk[0], chunk[1], chunk[2]))
                 .collect();
+            //println!("Velocity data read from GPU.");
+        } else {
+            terminal_utils::print_error("Velocity buffer not found.");
         }
     
         Ok(())
@@ -248,7 +289,6 @@ impl LBM {
         // Check for errors in input parameters
         if let Err(err) = self.check_errors_in_input() {
             terminal_utils::print_error(&format!("Error: {}", err));
-            
             return;
         }
 
@@ -325,7 +365,7 @@ impl LBM {
                     // Write the data to the file
                     writeln!(
                         writer,
-                        "{}, {}, {}, {:.6}, {:.6}", // Format floating-point numbers to 6 decimal places
+                        "{}, {}, {}, {:.6}, {:.8}", // Format floating-point numbers to 6 decimal places
                         x, y, z, rho, abs_u
                     )?;
                 }

@@ -2,16 +2,18 @@
 
 pub const LBM_KERNEL: &str = r#"
 // Define the number of directions based on the model
-#ifdef D2Q9
+#if defined(D2Q9)
 #define NUM_DIRECTIONS 9
-#elif D3Q7
+#elif defined(D3Q7)
 #define NUM_DIRECTIONS 7
-#elif D3Q15
+#elif defined(D3Q15)
 #define NUM_DIRECTIONS 15
-#elif D3Q19
+#elif defined(D3Q19)
 #define NUM_DIRECTIONS 19
-#elif D3Q27
+#elif defined(D3Q27)
 #define NUM_DIRECTIONS 27
+#else
+#error "No valid model defined (D2Q9, D3Q7, D3Q15, D3Q19, D3Q27)"
 #endif
 
 // Velocity vectors (D2Q9, D3Q7, D3Q15, D3Q19, D3Q27)
@@ -19,21 +21,21 @@ constant int c[NUM_DIRECTIONS][3] = {
 #ifdef D2Q9
     {0, 0, 0}, {1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0},
     {1, 1, 0}, {-1, -1, 0}, {1, -1, 0}, {-1, 1, 0}
-#elif D3Q7
+#elif defined(D3Q7)
     {0, 0, 0}, {1, 0, 0}, {-1, 0, 0}, {0, 1, 0},
     {0, -1, 0}, {0, 0, 1}, {0, 0, -1}
-#elif D3Q15
+#elif defined(D3Q15)
     {0, 0, 0}, {1, 0, 0}, {-1, 0, 0}, {0, 1, 0},
     {0, -1, 0}, {0, 0, 1}, {0, 0, -1}, {1, 1, 1},
     {-1, -1, -1}, {1, 1, -1}, {-1, -1, 1}, {1, -1, 1},
     {-1, 1, -1}, {-1, 1, 1}, {1, -1, -1}
-#elif D3Q19
+#elif defined(D3Q19)
     {0, 0, 0}, {1, 0, 0}, {-1, 0, 0}, {0, 1, 0},
     {0, -1, 0}, {0, 0, 1}, {0, 0, -1}, {1, 1, 0},
     {-1, -1, 0}, {1, 0, 1}, {-1, 0, -1}, {0, 1, 1},
     {0, -1, -1}, {1, -1, 0}, {-1, 1, 0}, {1, 0, -1},
     {-1, 0, 1}, {0, 1, -1}, {0, -1, 1}
-#elif D3Q27
+#elif defined(D3Q27)
     {0, 0, 0}, {1, 0, 0}, {-1, 0, 0}, {0, 1, 0},
     {0, -1, 0}, {0, 0, 1}, {0, 0, -1}, {1, 1, 0},
     {-1, -1, 0}, {1, 0, 1}, {-1, 0, -1}, {0, 1, 1},
@@ -46,21 +48,21 @@ constant int c[NUM_DIRECTIONS][3] = {
 
 // Weights for the velocity sets
 constant float w[NUM_DIRECTIONS] = {
-#ifdef D2Q9
+#ifdef defined(D2Q9)
     4.0 / 9.0, 1.0 / 9.0, 1.0 / 9.0, 1.0 / 9.0, 1.0 / 9.0,
     1.0 / 36.0, 1.0 / 36.0, 1.0 / 36.0, 1.0 / 36.0
-#elif D3Q7
+#elif defined(D3Q7)
     1.0 / 4.0, 1.0 / 8.0, 1.0 / 8.0, 1.0 / 8.0, 1.0 / 8.0, 1.0 / 8.0, 1.0 / 8.0
-#elif D3Q15
+#elif defined(D3Q15)
     2.0 / 9.0, 1.0 / 9.0, 1.0 / 9.0, 1.0 / 9.0, 1.0 / 9.0,
     1.0 / 9.0, 1.0 / 9.0, 1.0 / 72.0, 1.0 / 72.0, 1.0 / 72.0,
     1.0 / 72.0, 1.0 / 72.0, 1.0 / 72.0, 1.0 / 72.0, 1.0 / 72.0
-#elif D3Q19
+#elif defined(D3Q19)
     1.0 / 3.0, 1.0 / 18.0, 1.0 / 18.0, 1.0 / 18.0, 1.0 / 18.0,
     1.0 / 18.0, 1.0 / 18.0, 1.0 / 36.0, 1.0 / 36.0, 1.0 / 36.0,
     1.0 / 36.0, 1.0 / 36.0, 1.0 / 36.0, 1.0 / 36.0, 1.0 / 36.0,
     1.0 / 36.0, 1.0 / 36.0, 1.0 / 36.0, 1.0 / 36.0
-#elif D3Q27
+#elif defined(D3Q27)
     8.0 / 27.0, 2.0 / 27.0, 2.0 / 27.0, 2.0 / 27.0, 2.0 / 27.0,
     2.0 / 27.0, 2.0 / 27.0, 1.0 / 54.0, 1.0 / 54.0, 1.0 / 54.0,
     1.0 / 54.0, 1.0 / 54.0, 1.0 / 54.0, 1.0 / 54.0, 1.0 / 54.0,

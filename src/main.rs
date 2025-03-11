@@ -17,6 +17,6 @@ fn main() {
         }
     });
 
-    lbm.run(1000);
+    lbm.run(100000);
     lbm.output_to("output.csv").expect("Failed to write output file.");
 }
