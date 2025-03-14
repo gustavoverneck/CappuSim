@@ -40,7 +40,7 @@ pub struct LBM {
     device: Option<Device>,
     context: Option<Context>,
     queue: Option<Queue>,
-    program: Option<ocl::Program>,
+    program: Option<Program>,
     streaming_kernel: Option<Kernel>,
     collision_kernel: Option<Kernel>,
     found_errors: bool,
@@ -73,11 +73,11 @@ impl LBM {
             viscosity,
             omega: 1.0 / (3.0 * viscosity + 0.5),
             time_steps: 0,
-            f: vec![0.0; (size * Q) as usize],
-            f_new: vec![0.0; (size * Q) as usize],
-            density: vec![1.0; size as usize],   // Initialize density to 1.0
-            u: vec![Velocity::zero(); size as usize], // Initialize velocity to zero
-            flags: vec![0; size as usize],       // Initialize flags to 0 (fluid)
+            f: vec![0.0; size * Q],
+            f_new: vec![0.0; size * Q],
+            density: vec![1.0; size],   // Initialize density to 1.0
+            u: vec![Velocity::zero(); size], // Initialize velocity to zero
+            flags: vec![0; size],       // Initialize flags to 0 (fluid)
             f_buffer: None,
             f_new_buffer: None,
             density_buffer: None,
@@ -220,27 +220,27 @@ impl LBM {
 
         // Add size of f buffer
         if let Some(buffer) = &self.f_buffer {
-            total_vram += buffer.len() * std::mem::size_of::<f32>();
+            total_vram += buffer.len() * size_of::<f32>();
         }
 
         // Add size of f_new buffer
         if let Some(buffer) = &self.f_new_buffer {
-            total_vram += buffer.len() * std::mem::size_of::<f32>();
+            total_vram += buffer.len() * size_of::<f32>();
         }
 
         // Add size of density buffer
         if let Some(buffer) = &self.density_buffer {
-            total_vram += buffer.len() * std::mem::size_of::<f32>();
+            total_vram += buffer.len() * size_of::<f32>();
         }
 
         // Add size of velocity buffer
         if let Some(buffer) = &self.velocity_buffer {
-            total_vram += buffer.len() * std::mem::size_of::<f32>();
+            total_vram += buffer.len() * size_of::<f32>();
         }
 
         // Add size of flags buffer
         if let Some(buffer) = &self.flags_buffer {
-            total_vram += buffer.len() * std::mem::size_of::<u8>();
+            total_vram += buffer.len() * size_of::<u8>();
         }
 
         total_vram
@@ -274,7 +274,7 @@ impl LBM {
         }
 
         // Check if density and velocity vectors have the correct length
-        let expected_size = (self.Nx * self.Ny * self.Nz) as usize;
+        let expected_size = self.Nx * self.Ny * self.Nz;
         if self.density.len() != expected_size {
             self.found_errors = true;
             return Err("Density vector has incorrect length.".into());
@@ -303,16 +303,16 @@ impl LBM {
     where
         F: Fn(&mut LBM, usize, usize, usize, usize),    // x, y, z, n
     {
-        for n in 0..self.N as usize {
+        for n in 0..self.N {
             // Get the x, y, z coordinates from the linear index n
             let (x, y, z) = xyz_from_n(&n, &self.Nx, &self.Ny, &self.Nz);
             // Call the user-defined lambda function
-            f(self, x as usize, y as usize, z as usize, n);
+            f(self, x, y, z, n);
         }
     }
 
     // Read data from GPU to CPU
-    fn read_from_gpu(&mut self) -> Result<(), Box<dyn std::error::Error>> {    
+    fn read_from_gpu(&mut self) -> Result<(), Box<dyn Error>> {
         // Velocity
         let mut flat_velocity_data = vec![0.0; self.u.len() * 3]; // Create a flat buffer
         self.velocity_buffer
@@ -404,7 +404,7 @@ impl LBM {
     pub fn run(&mut self, time_steps: usize) {
         // Print LatteLab welcome message
         terminal_utils::print_welcome_message();
-        self.time_steps = time_steps as usize;
+        self.time_steps = time_steps;
         println!("{}", "-".repeat(72));
 
         // Check for errors in input parameters
@@ -446,7 +446,9 @@ impl LBM {
             // Execute kernels
             unsafe {
                 self.streaming_kernel.as_ref().unwrap().enq().expect("Failed to enqueue 'streaming_kernel'.");
+                self.queue.as_ref().unwrap().finish().expect("Queue finish failed.");
                 self.collision_kernel.as_ref().unwrap().enq().expect("Failed to enqueue 'collision_kernel'.");
+                self.queue.as_ref().unwrap().finish().expect("Queue finish failed.");
             }
         
             // Swap f and f_new buffers
@@ -469,16 +471,16 @@ impl LBM {
         let elapsed_seconds = elapsed_time.as_secs_f64();
 
         // Calculate MLUps
-        let mlups = (self.N as f64 * self.time_steps as f64) / elapsed_seconds / 1_000_000.0;   // Performance in Million Lattice Updates per Second (MLUps)
+        let mlups = (self.N as f64 * self.time_steps as f64) / elapsed_seconds / 1_000_000.0;   // Performance in Millions Lattice Updates per Second (MLUps)
 
         terminal_utils::print_metrics(
             self.time_steps as u64,
             elapsed_seconds,
-            mlups,  
+            mlups,
         );
     }
 
-    fn calculate_vorticity(&self, x: usize, y: usize, z: usize) -> Velocity {
+    fn calculate_vorticity(&self, x: usize, y: usize, z: usize) -> f32 {
         let dx = 1.0; /// self.Nx as f32;
         let dy = 1.0; /// self.Ny as f32;
         let dz = 1.0; /// self.Nz as f32;
@@ -499,14 +501,14 @@ impl LBM {
         let dw_dx = (get_velocity(x + 1, y, z).z - get_velocity(x.saturating_sub(1), y, z).z) / (2.0 * dx);
         let dw_dy = (get_velocity(x, y + 1, z).z - get_velocity(x, y.saturating_sub(1), z).z) / (2.0 * dy);
 
-        Velocity {
-            x: dw_dy - dv_dz,
-            y: du_dz - dw_dx,
-            z: dv_dx - du_dy,
-        }
+        let vorticity_x = dw_dy - dv_dz;
+        let vorticity_y = du_dz - dw_dx;
+        let vorticity_z = dv_dx - du_dy;
+
+        (vorticity_x * vorticity_x + vorticity_y * vorticity_y + vorticity_z * vorticity_z).sqrt()
     }
 
-    pub fn output_to(&mut self, path: &str) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn output_to(&mut self, path: &str) -> Result<(), Box<dyn Error>> {
         if self.found_errors {
             return Err("Errors were found in the input parameters. Cannot write output.".into());
         }
@@ -515,7 +517,7 @@ impl LBM {
         let mut writer = BufWriter::new(file);
         
         // Write the header
-        writeln!(writer, "x, y, z, rho,      vx,       vy,       vz,       vtx_x,    vtx_y,    vtx_z")?;
+        writeln!(writer, "x, y, z, rho,      ux,       uy,       uz,       v")?;
         
         // Iterate over the grid and write the data
         for x in 0..self.Nx {
@@ -533,8 +535,8 @@ impl LBM {
                 // Write the data to the file
                 writeln!(
                 writer,
-                "{}, {}, {}, {:.6}, {:.6}, {:.6}, {:.6}, {:.6}, {:.6}, {:.6}", // Format floating-point numbers to 6 decimal places
-                x, y, z, rho, u.x, u.y, u.z, vorticity.x, vorticity.y, vorticity.z
+                "{}, {}, {}, {:.6}, {:.6}, {:.6}, {:.6}, {:.6}", // Format floating-point numbers to 6 decimal places
+                x, y, z, rho, u.x, u.y, u.z, vorticity
                 )?;
             }
             }
@@ -553,8 +555,8 @@ pub fn n_from_xyz(x: &usize, y: &usize, z: &usize, Nx: &usize, Ny: &usize, Nz: &
     x + Nx * (y + Ny * z)
 }
 pub fn xyz_from_n(n: &usize, Nx: &usize, Ny: &usize, Nz: &usize) -> (usize, usize, usize) {
-    let x = (*n as usize) % Nx;
-    let y = ((*n as usize) / Nx) % Ny;
-    let z = (*n as usize) / (Ny * Nx);
+    let x = *n % Nx;
+    let y = (*n / Nx) % Ny;
+    let z = *n / (Ny * Nx);
     (x, y, z)
 }

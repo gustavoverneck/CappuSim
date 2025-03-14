@@ -57,6 +57,7 @@ constant float w[Q] = {
 #endif
 };
 
+// Streaming kernel
 __kernel void streaming_kernel(
     __global float* f, __global float* f_new) {
     // Get global IDs (node coordinates in the 3D grid)
@@ -105,8 +106,11 @@ __kernel void collision_kernel(__global float* f, __global float* rho, __global 
     int idx = x + y * NX + z * NX * NY;
 
     // Calculate density and velocity (momentum)
-    float local_rho = 0.0;
-    float ux = 0.0, uy = 0.0, uz = 0.0;
+    float local_rho = 0.0f;
+    float ux = 0.0f;
+    float uy = 0.0f;
+    float uz = 0.0f;
+
 
     for (int i = 0; i < Q; i++) {
         local_rho += f[idx * Q + i];
@@ -116,7 +120,7 @@ __kernel void collision_kernel(__global float* f, __global float* rho, __global 
     }
 
     // Normalize velocity
-    if (local_rho > 1.0e-15) {
+    if (local_rho > 1.0e-10) {
         ux /= local_rho;
         uy /= local_rho;
         uz /= local_rho;
@@ -128,16 +132,18 @@ __kernel void collision_kernel(__global float* f, __global float* rho, __global 
 
     // Calculate the equilibrium distribution function and apply the BGK model
     for (int i = 0; i < Q; i++) {
-        float cu = c[i][0] * ux + c[i][1] * uy + c[i][2] * uz;
-        float u2 = ux * ux + uy * uy + uz * uz;
-        float feq = w[i] * local_rho * (1.0 + 3.0 * cu + 4.5 * cu * cu - 1.5 * u2);
+        float cu = c[i][0]*ux + c[i][1]*uy + c[i][2]*uz;
 
-        f[idx * Q + i] = f[idx * Q + i] - omega * (f[idx * Q + i] - feq);
+        float u2 = ux * ux + uy * uy + uz * uz;
+        float feq = local_rho * w[i] * (1.0f + 3.0f * cu + 4.5f * cu * cu - 1.5f * u2);
+
+        f[idx*Q + i] = f[idx*Q + i] * (1.0f - omega) + feq * omega;
+
     }
 
     // Store the computed density and velocity
     rho[idx] = local_rho;
-    u[idx * 3 + 0] = ux;
+    u[idx * 3] = ux;
     u[idx * 3 + 1] = uy;
     u[idx * 3 + 2] = uz;
 }
