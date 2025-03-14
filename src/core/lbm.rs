@@ -218,6 +218,16 @@ impl LBM {
         // Note: Kernel size is not included in VRAM usage calculation as it cannot be easily determined
         let mut total_vram = 0;
 
+        // Add size of f buffer
+        if let Some(buffer) = &self.f_buffer {
+            total_vram += buffer.len() * std::mem::size_of::<f32>();
+        }
+
+        // Add size of f_new buffer
+        if let Some(buffer) = &self.f_new_buffer {
+            total_vram += buffer.len() * std::mem::size_of::<f32>();
+        }
+
         // Add size of density buffer
         if let Some(buffer) = &self.density_buffer {
             total_vram += buffer.len() * std::mem::size_of::<f32>();
@@ -232,6 +242,7 @@ impl LBM {
         if let Some(buffer) = &self.flags_buffer {
             total_vram += buffer.len() * std::mem::size_of::<u8>();
         }
+
         total_vram
     }
 
@@ -341,6 +352,55 @@ impl LBM {
             .collect();
     }
 
+    fn equilibrium(&self, rho: &f32, u: &Velocity, i: usize) -> f32 {
+        let c: &[[i32; 3]] = match self.model.as_str() {
+            "D2Q9" => &[
+                [0, 0, 0], [1, 0, 0], [0, 1, 0], [-1, 0, 0], [0, -1, 0],
+                [1, 1, 0], [-1, 1, 0], [-1, -1, 0], [1, -1, 0]
+            ],
+            "D3Q7" => &[
+                [0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1],
+                [-1, 0, 0], [0, -1, 0], [0, 0, -1]
+            ],
+            "D3Q15" => &[
+                [0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1],
+                [-1, 0, 0], [0, -1, 0], [0, 0, -1], [1, 1, 0],
+                [-1, 1, 0], [-1, -1, 0], [1, -1, 0], [1, 0, 1],
+                [-1, 0, 1], [-1, 0, -1], [1, 0, -1]
+            ],
+            "D3Q19" => &[
+                [0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1],
+                [-1, 0, 0], [0, -1, 0], [0, 0, -1], [1, 1, 0],
+                [-1, 1, 0], [-1, -1, 0], [1, -1, 0], [1, 0, 1],
+                [-1, 0, 1], [-1, 0, -1], [1, 0, -1], [0, 1, 1],
+                [0, -1, 1], [0, -1, -1], [0, 1, -1]
+            ],
+            "D3Q27" => &[
+                [0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1],
+                [-1, 0, 0], [0, -1, 0], [0, 0, -1], [1, 1, 0],
+                [-1, 1, 0], [-1, -1, 0], [1, -1, 0], [1, 0, 1],
+                [-1, 0, 1], [-1, 0, -1], [1, 0, -1], [0, 1, 1],
+                [0, -1, 1], [0, -1, -1], [0, 1, -1], [1, 1, 1],
+                [-1, 1, 1], [-1, -1, 1], [1, -1, 1], [1, 1, -1],
+                [-1, 1, -1], [-1, -1, -1], [1, -1, -1]
+            ],
+            _ => panic!("Unsupported model: {}", self.model),
+        };
+
+        let w: &[f32] = match self.model.as_str() {
+            "D2Q9" => &[4.0 / 9.0, 1.0 / 9.0, 1.0 / 9.0, 1.0 / 9.0, 1.0 / 9.0, 1.0 / 36.0, 1.0 / 36.0, 1.0 / 36.0, 1.0 / 36.0],
+            "D3Q7" => &[1.0 / 4.0, 1.0 / 8.0, 1.0 / 8.0, 1.0 / 8.0, 1.0 / 8.0, 1.0 / 8.0, 1.0 / 8.0],
+            "D3Q15" => &[2.0 / 9.0, 1.0 / 9.0, 1.0 / 9.0, 1.0 / 9.0, 1.0 / 9.0, 1.0 / 72.0, 1.0 / 72.0, 1.0 / 72.0, 1.0 / 72.0, 1.0 / 72.0, 1.0 / 72.0, 1.0 / 72.0, 1.0 / 72.0, 1.0 / 72.0, 1.0 / 72.0],
+            "D3Q19" => &[1.0 / 3.0, 1.0 / 18.0, 1.0 / 18.0, 1.0 / 18.0, 1.0 / 18.0, 1.0 / 18.0, 1.0 / 18.0, 1.0 / 36.0, 1.0 / 36.0, 1.0 / 36.0, 1.0 / 36.0, 1.0 / 36.0, 1.0 / 36.0, 1.0 / 36.0, 1.0 / 36.0, 1.0 / 36.0, 1.0 / 36.0, 1.0 / 36.0, 1.0 / 36.0],
+            "D3Q27" => &[8.0 / 27.0, 2.0 / 27.0, 2.0 / 27.0, 2.0 / 27.0, 2.0 / 27.0, 2.0 / 27.0, 2.0 / 27.0, 1.0 / 54.0, 1.0 / 54.0, 1.0 / 54.0, 1.0 / 54.0, 1.0 / 54.0, 1.0 / 54.0, 1.0 / 54.0, 1.0 / 54.0, 1.0 / 54.0, 1.0 / 54.0, 1.0 / 54.0, 1.0 / 54.0, 1.0 / 216.0, 1.0 / 216.0, 1.0 / 216.0, 1.0 / 216.0, 1.0 / 216.0, 1.0 / 216.0, 1.0 / 216.0, 1.0 / 216.0],
+            _ => panic!("Unsupported model: {}", self.model),
+        };
+
+        let cu = c[i].iter().zip(&[u.x, u.y, u.z]).map(|(ci, ui)| *ci as f32 * ui).sum::<f32>();
+        let u2 = u.x * u.x + u.y * u.y + u.z * u.z;
+        w[i] * *rho * (1.0 + 3.0 * cu + 4.5 * cu * cu - 1.5 * u2)
+    }
+
     pub fn run(&mut self, time_steps: usize) {
         // Print LatteLab welcome message
         terminal_utils::print_welcome_message();
@@ -351,6 +411,16 @@ impl LBM {
         if let Err(err) = self.check_errors_in_input() {
             terminal_utils::print_error(&format!("Error: {}", err));
             return;
+        }
+
+        // Initialize f in equilibrium from rho and u
+        for n in 0..self.N {
+            let (x, y, z) = xyz_from_n(&n, &self.Nx, &self.Ny, &self.Nz);
+            let rho = self.density[n];
+            let u = self.u[n];
+            for i in 0..self.Q {
+                self.f[n * self.Q + i] = self.equilibrium(&rho, &u, i);
+            }
         }
 
         // Initialize OpenCL
@@ -375,13 +445,17 @@ impl LBM {
         for _ in 0..self.time_steps {
             // Update the simulation state
             unsafe {
-                self.streaming_kernel.as_ref().unwrap().enq().expect("Failed to enqueue 'streaming_kernel'.");
                 self.collision_kernel.as_ref().unwrap().enq().expect("Failed to enqueue 'streaming_kernel'.");
+                self.streaming_kernel.as_ref().unwrap().enq().expect("Failed to enqueue 'streaming_kernel'.");
             }
             pb.inc(1); // Increment the progress bar by 1
         }
+        // End queue
+        self.queue.as_ref().unwrap().finish().expect("Queue finish failed.");
+
         // Copy buffers from GPU to CPU
         self.read_from_gpu().expect("Failed to read data from GPU.");
+
 
         // Finish the progress bar
         pb.finish_with_message("Done!");
@@ -400,6 +474,34 @@ impl LBM {
         );
     }
 
+    fn calculate_vorticity(&self, x: usize, y: usize, z: usize) -> Velocity {
+        let dx = 1.0; /// self.Nx as f32;
+        let dy = 1.0; /// self.Ny as f32;
+        let dz = 1.0; /// self.Nz as f32;
+
+        let get_velocity = |x, y, z| {
+            if x >= self.Nx || y >= self.Ny || z >= self.Nz {
+                Velocity::zero()
+            } else {
+                let index = n_from_xyz(&x, &y, &z, &self.Nx, &self.Ny, &self.Nz);
+                self.u[index]
+            }
+        };
+
+        let du_dy = (get_velocity(x, y + 1, z).x - get_velocity(x, y.saturating_sub(1), z).x) / (2.0 * dy);
+        let du_dz = (get_velocity(x, y, z + 1).x - get_velocity(x, y, z.saturating_sub(1)).x) / (2.0 * dz);
+        let dv_dx = (get_velocity(x + 1, y, z).y - get_velocity(x.saturating_sub(1), y, z).y) / (2.0 * dx);
+        let dv_dz = (get_velocity(x, y, z + 1).y - get_velocity(x, y, z.saturating_sub(1)).y) / (2.0 * dz);
+        let dw_dx = (get_velocity(x + 1, y, z).z - get_velocity(x.saturating_sub(1), y, z).z) / (2.0 * dx);
+        let dw_dy = (get_velocity(x, y + 1, z).z - get_velocity(x, y.saturating_sub(1), z).z) / (2.0 * dy);
+
+        Velocity {
+            x: dw_dy - dv_dz,
+            y: du_dz - dw_dx,
+            z: dv_dx - du_dy,
+        }
+    }
+
     pub fn output_to(&mut self, path: &str) -> Result<(), Box<dyn std::error::Error>> {
         if self.found_errors {
             return Err("Errors were found in the input parameters. Cannot write output.".into());
@@ -407,27 +509,30 @@ impl LBM {
         // Create the file and wrap it in a BufWriter for better performance
         let file = File::create(path)?;
         let mut writer = BufWriter::new(file);
-    
+        
         // Write the header
-        writeln!(writer, "x, y, z, rho, vx, vy, vz")?;
-    
+        writeln!(writer, "x, y, z, rho,      vx,       vy,       vz,       vtx_x,    vtx_y,    vtx_z")?;
+        
         // Iterate over the grid and write the data
         for x in 0..self.Nx {
             for y in 0..self.Ny {
-                for z in 0..self.Nz {
-                    // Calculate the linear index
-                    let index = n_from_xyz(&x, &y, &z, &self.Nx, &self.Ny, &self.Nz);
-                    // Get density and velocity
-                    let rho = &self.density[index];
-                    let u = &self.u[index];
-    
-                    // Write the data to the file
-                    writeln!(
-                        writer,
-                        "{}, {}, {}, {:.6}, {:.6}, {:.6}, {:.6}", // Format floating-point numbers to 6 decimal places
-                        x, y, z, rho, u.x, u.y, u.z
-                    )?;
-                }
+            for z in 0..self.Nz {
+                // Calculate the linear index
+                let index = n_from_xyz(&x, &y, &z, &self.Nx, &self.Ny, &self.Nz);
+                // Get density and velocity
+                let rho = &self.density[index];
+                let u = &self.u[index];
+                
+                // Calculate vorticity
+                let vorticity = self.calculate_vorticity(x, y, z);
+        
+                // Write the data to the file
+                writeln!(
+                writer,
+                "{}, {}, {}, {:.6}, {:.6}, {:.6}, {:.6}, {:.6}, {:.6}, {:.6}", // Format floating-point numbers to 6 decimal places
+                x, y, z, rho, u.x, u.y, u.z, vorticity.x, vorticity.y, vorticity.z
+                )?;
+            }
             }
         }
     
@@ -441,9 +546,8 @@ impl LBM {
 
 
 pub fn n_from_xyz(x: &usize, y: &usize, z: &usize, Nx: &usize, Ny: &usize, Nz: &usize) -> usize {
-    z * Ny * Nx + y * Nx + x
+    x + Nx * (y + Ny * z)
 }
-
 pub fn xyz_from_n(n: &usize, Nx: &usize, Ny: &usize, Nz: &usize) -> (usize, usize, usize) {
     let z = (*n as usize) / (Ny * Nx);
     let y = ((*n as usize) % (Ny * Nx)) / Nx;

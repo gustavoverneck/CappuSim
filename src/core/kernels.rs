@@ -68,7 +68,7 @@ __kernel void streaming_kernel(
     if (x >= NX || y >= NY || z >= NZ) return;
 
     // Calculate the linear index of the current node
-    int idx = x + y * NX + z * NX * NY;
+    int idx = x + NX * (y + NY * z);
 
     // Loop over the directions
     for (int i = 0; i < Q; i++) {
@@ -78,7 +78,6 @@ __kernel void streaming_kernel(
         int z_nbr = z + c[i][2];
 
         // Apply periodic boundary conditions
-        // Ensure the neighbors are within the bounds using modulo operation
         x_nbr = (x_nbr + NX) % NX;  // Wrap around x within grid bounds
         y_nbr = (y_nbr + NY) % NY;  // Wrap around y within grid bounds
         z_nbr = (z_nbr + NZ) % NZ;  // Wrap around z within grid bounds
@@ -116,7 +115,7 @@ __kernel void collision_kernel(__global float* f, __global float* rho, __global 
     }
 
     // Normalize velocity
-    if (local_rho > 1.0e-10) {
+    if (local_rho > 1.0e-15) {
         ux /= local_rho;
         uy /= local_rho;
         uz /= local_rho;
