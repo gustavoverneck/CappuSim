@@ -88,6 +88,7 @@ __kernel void streaming_kernel(
         // Perform the streaming of the distribution function
         f_new[idx_nbr * Q + i] = f[idx * Q + i];
     }
+
 }
 
 // Collision kernel (BGK model)

@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 use std::fs::File;
 use std::io::{self, Write, BufWriter};
 use std::path::Path;
-
+use std::mem::swap;
 use crate::utils::terminal_utils;
 use crate::utils::velocity::{Velocity};
 use crate::core::kernels::LBM_KERNEL;
@@ -141,7 +141,7 @@ impl LBM {
         self.f_buffer = Some(Buffer::<f32>::builder()
         .queue(self.queue.as_ref().unwrap().clone())
         .flags(ocl::flags::MEM_READ_WRITE)
-        .len(self.u.len() * self.Q) // Ensures correct buffer size for 'f'
+        .len(self.f.len()) // Ensures correct buffer size for 'f'
         .copy_host_slice(&self.f)
         .build()
         .expect("Failed to build 'f' buffer."));
@@ -443,11 +443,15 @@ impl LBM {
 
         // Main Loop
         for _ in 0..self.time_steps {
-            // Update the simulation state
+            // Execute kernels
             unsafe {
-                self.collision_kernel.as_ref().unwrap().enq().expect("Failed to enqueue 'streaming_kernel'.");
                 self.streaming_kernel.as_ref().unwrap().enq().expect("Failed to enqueue 'streaming_kernel'.");
+                self.collision_kernel.as_ref().unwrap().enq().expect("Failed to enqueue 'collision_kernel'.");
             }
+        
+            // Swap f and f_new buffers
+            swap(&mut self.f_buffer, &mut self.f_new_buffer);
+        
             pb.inc(1); // Increment the progress bar by 1
         }
         // End queue
@@ -549,8 +553,8 @@ pub fn n_from_xyz(x: &usize, y: &usize, z: &usize, Nx: &usize, Ny: &usize, Nz: &
     x + Nx * (y + Ny * z)
 }
 pub fn xyz_from_n(n: &usize, Nx: &usize, Ny: &usize, Nz: &usize) -> (usize, usize, usize) {
-    let z = (*n as usize) / (Ny * Nx);
-    let y = ((*n as usize) % (Ny * Nx)) / Nx;
     let x = (*n as usize) % Nx;
+    let y = ((*n as usize) / Nx) % Ny;
+    let z = (*n as usize) / (Ny * Nx);
     (x, y, z)
 }
