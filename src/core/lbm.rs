@@ -1,9 +1,8 @@
 // src/core/lbm.rs
 
-#![allow(unused)]           // Allow unused imports and warnings
+//#![allow(unused)]           // Allow unused imports and warnings
 #![allow(non_snake_case)]   // Allow non-snake_case naming convention
-use ocl::{Platform, Device, Context, Queue, ProQue, Buffer, Kernel};
-use ocl::enums::DeviceInfo;
+use ocl::{Platform, Device, Context, Queue, Program, Buffer, Kernel};
 use std::error::Error;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::thread;
@@ -12,52 +11,84 @@ use std::fs::File;
 use std::io::{self, Write, BufWriter};
 use std::path::Path;
 
+
 use crate::utils::terminal_utils;
 use crate::utils::velocity::{Velocity};
 use crate::core::kernels::LBM_KERNEL;
 
 pub struct LBM {
-    pub Nx: u64,
-    pub Ny: u64,
-    pub Nz: u64,
-    pub N: u64,
+    pub Nx: usize,
+    pub Ny: usize,
+    pub Nz: usize,
+    pub N: usize,
     pub model: String,
+    D: usize,
+    Q: usize,
     pub viscosity: f32,
-    pub time_steps: u64,
+    pub omega: f32,
+    pub time_steps: usize,
+    f: Vec<f32>,
+    f_new: Vec<f32>,
     pub density: Vec<f32>,
     pub u: Vec<Velocity>,
     pub flags: Vec<u8>,
-    context: Option<Context>,
-    queue: Option<Queue>,
-    pro_que: Option<ProQue>,
+    f_buffer: Option<Buffer<f32>>,
+    f_new_buffer: Option<Buffer<f32>>,
     density_buffer: Option<Buffer<f32>>,
     velocity_buffer: Option<Buffer<f32>>,
     flags_buffer: Option<Buffer<u8>>,
+    platform: Option<Platform>,
+    device: Option<Device>,
+    context: Option<Context>,
+    queue: Option<Queue>,
+    program: Option<ocl::Program>,
     streaming_kernel: Option<Kernel>,
     collision_kernel: Option<Kernel>,
     found_errors: bool,
 }
 
 impl LBM {
-    pub fn new(Nx: u64, Ny: u64, Nz: u64, model: String, viscosity: f32) -> Self {
+    pub fn new(Nx: usize, Ny: usize, Nz: usize, model: String, viscosity: f32) -> Self {
         let size = Nx * Ny * Nz;
+        let Q = match model.clone().as_str() {
+            "D2Q9" => 9,
+            "D3Q7" => 7,
+            "D3Q15" => 15,
+            "D3Q19" => 19,
+            "D3Q27" => 27,
+            _ => panic!("Unsupported model: {}", model),
+        };
+
         LBM {
             Nx,
             Ny,
             Nz,
             N: size,
-            model,
+            model: model.clone(),
+            D: match model.clone().as_str() {
+                "D2Q9" => 2,
+                "D3Q7" | "D3Q15" | "D3Q19" | "D3Q27" => 3,
+                _ => panic!("Unsupported model: {}", model),
+            },
+            Q,
             viscosity,
+            omega: 1.0 / (3.0 * viscosity + 0.5),
             time_steps: 0,
+            f: vec![0.0; (size * Q) as usize],
+            f_new: vec![0.0; (size * Q) as usize],
             density: vec![1.0; size as usize],   // Initialize density to 1.0
             u: vec![Velocity::zero(); size as usize], // Initialize velocity to zero
             flags: vec![0; size as usize],       // Initialize flags to 0 (fluid)
-            context: None,
-            queue: None,
-            pro_que: None,
+            f_buffer: None,
+            f_new_buffer: None,
             density_buffer: None,
             velocity_buffer: None,
             flags_buffer: None,
+            platform: None,
+            device: None,
+            context: None,
+            queue: None,
+            program: None,
             streaming_kernel: None,
             collision_kernel: None,
             found_errors: false,
@@ -65,89 +96,119 @@ impl LBM {
     }
 
     fn initialize_ocl(&mut self) -> Result<(), Box<dyn Error>> {
-        // Step 1: Get the first available platform
-        let platform = Platform::list().into_iter().next().ok_or("Platform not found")?;
-        println!("Platform: {}", platform.name()?);
-    
-        // Step 2: Get the first available device
-        let device = Device::list_all(&platform)?
+        // Select default platform and device
+        self.platform = Some(Platform::list()
             .into_iter()
             .next()
-            .ok_or("Device not found")?;
-        println!("Device: {}", device.name()?);
-    
-        // Step 3: Create a context and command queue
-        let context = Context::builder()
-            .platform(platform)
-            .devices(device.clone())
-            .build()?;
-    
-        let queue = Queue::new(&context, device, None)?;
-    
-        // Step 4: Compile the OpenCL kernel
-        let kernel_source = match self.model.as_str() {
-            "D2Q9" => format!("#define D2Q9\n{}", LBM_KERNEL),
-            "D3Q7" => format!("#define D3Q7\n{}", LBM_KERNEL),
-            "D3Q15" => format!("#define D3Q15\n{}", LBM_KERNEL),
-            "D3Q19" => format!("#define D3Q19\n{}", LBM_KERNEL),
-            "D3Q27" => format!("#define D3Q27\n{}", LBM_KERNEL),
-            _ => return Err("Unsupported model".into()),
-        };
-    
-        // Create the ProQue object with the specified dimensions
-        let pro_que = ProQue::builder()
-            .context(context.clone())
-            .src(kernel_source)
-            .dims((self.Nx as usize, self.Ny as usize, self.Nz as usize)) // Set the dimensions here
+            .ok_or("Platform not found")?);
+        println!("Platform: {}", self.platform.as_ref().unwrap().name()?);
+        
+        self.device = Some(Device::list_all(self.platform.as_ref().unwrap())?
+            .into_iter()
+            .next()
+            .ok_or("Device not found")?);
+        println!("Device: {}", self.device.as_ref().unwrap().name()?);
+
+        // Create a context for the selected device
+        self.context = Some(Context::builder()
+            .platform(self.platform.unwrap())
+            .devices(self.device.unwrap().clone())
             .build()
-            .map_err(|e| {
-                eprintln!("OpenCL kernel compilation failed: {}", e);
-                e
-            })?;
-    
-        // Step 5: Create OpenCL buffers with the correct size
-        let density_buffer = pro_que.buffer_builder::<f32>()
-        .len(self.density.len()) // Ensure this matches the grid size
+            .expect("Failed to build context."));
+        
+        // Create a command queue for the device
+        self.queue = Some(Queue::new(self.context.as_ref().unwrap(), self.device.unwrap().clone(), None)
+            .expect("Failed to create command queue."));
+
+        // Write defines on kernel
+        let kernel_source = format!(
+                                r#"
+                #define NX {}
+                #define NY {}
+                #define NZ {}
+                #define Q {}
+                #define {}
+                {}"#, self.Nx, self.Ny, self.Nz, self.Q, self.model.as_str(), LBM_KERNEL);
+        //println!("{}", kernel_source); //Debug: print final kernel
+
+        // Define OpenCL program
+        self.program = Some(Program::builder()
+            .src(kernel_source)
+            .devices(self.device.as_ref().unwrap())
+            .build(self.context.as_ref().unwrap())
+            .expect("Failed to build program."));
+
+        // Create buffers
+        self.f_buffer = Some(Buffer::<f32>::builder()
+        .queue(self.queue.as_ref().unwrap().clone())
+        .flags(ocl::flags::MEM_READ_WRITE)
+        .len(self.u.len() * self.Q) // Ensures correct buffer size for 'f'
+        .copy_host_slice(&self.f)
+        .build()
+        .expect("Failed to build 'f' buffer."));
+
+        self.f_new_buffer = Some(Buffer::<f32>::builder()
+        .queue(self.queue.as_ref().unwrap().clone())
+        .flags(ocl::flags::MEM_READ_WRITE)
+        .len(self.u.len() * self.Q) // Ensures correct buffer size for 'f_new'
+        .copy_host_slice(&self.f_new)
+        .build()
+        .expect("Failed to build 'f_new' buffer."));
+
+        self.density_buffer = Some(Buffer::<f32>::builder()
+        .queue(self.queue.as_ref().unwrap().clone())
+        .flags(ocl::flags::MEM_READ_WRITE)
+        .len(self.density.len()) // Correct size for 'density'
         .copy_host_slice(&self.density)
-        .build()?;
+        .build()
+        .expect("Failed to build 'density' buffer."));
 
-        let velocity_buffer = pro_que.buffer_builder::<f32>()
-        .len(self.u.len() * 3) // Ensure this matches the grid size (3 components per velocity)
-        .copy_host_slice(&self.u.iter().flat_map(|v| vec![v.x, v.y, v.z]).collect::<Vec<f32>>())
-        .build()?;
+        // Optimized velocity buffer creation
+        let velocity_data: Vec<f32> = self.u.iter()
+        .flat_map(|v| [v.x, v.y, v.z])  // Cleaner and faster than `.collect::<Vec<_>>()`
+        .collect();
 
-        let flags_buffer = pro_que.buffer_builder::<u8>()
-        .len(self.flags.len()) // Ensure this matches the grid size
+        self.velocity_buffer = Some(Buffer::<f32>::builder()
+        .queue(self.queue.as_ref().unwrap().clone())
+        .flags(ocl::flags::MEM_READ_WRITE)
+        .len(velocity_data.len()) // Corrected size — directly matches velocity data length
+        .copy_host_slice(&velocity_data)
+        .build()
+        .expect("Failed to build 'velocity' buffer."));
+
+        // Corrected flags buffer size
+        self.flags_buffer = Some(Buffer::<u8>::builder()
+        .queue(self.queue.as_ref().unwrap().clone())
+        .flags(ocl::flags::MEM_READ_WRITE)
+        .len(self.flags.len()) // Corrected size for 'flags'
         .copy_host_slice(&self.flags)
-        .build()?;
-    
-        // Step 6: Store resources in the LBM struct
-        self.context = Some(context);
-        self.queue = Some(queue);
-        self.pro_que = Some(pro_que);
-        self.density_buffer = Some(density_buffer);
-        self.velocity_buffer = Some(velocity_buffer);
-        self.flags_buffer = Some(flags_buffer);
+        .build()
+        .expect("Failed to build 'flags' buffer."));
 
-        println!("VRAM usage: {:.2} MB", self.calculate_vram_usage() as f64 / (1024.0 * 1024.0));
 
-        // Step 7: Create and store the kernels
-        self.streaming_kernel = Some(self.pro_que.as_ref().unwrap().kernel_builder("streaming_kernel")
-            .arg(self.density_buffer.as_ref().unwrap())
-            .arg(self.velocity_buffer.as_ref().unwrap())
-            .arg(self.Nx as i32)
-            .arg(self.Ny as i32)
-            .arg(self.Nz as i32)
-            .build()?);
-            
-        self.collision_kernel = Some(self.pro_que.as_ref().unwrap().kernel_builder("collision_kernel")
-            .arg(self.density_buffer.as_ref().unwrap())
-            .arg(self.Nx as i32)
-            .arg(self.Ny as i32)
-            .arg(self.Nz as i32)
-            .arg(1.0 / self.viscosity) // omega = 1 / tau
-            .build()?);
+        // Create kernels and set its arguments
+        self.streaming_kernel = Some(Kernel::builder()
+            .program(self.program.as_ref().unwrap())
+            .name("streaming_kernel")
+            .queue(self.queue.as_ref().unwrap().clone())
+            .global_work_size(self.N)
+            .arg(self.f_buffer.as_ref().unwrap())
+            .arg(self.f_new_buffer.as_ref().unwrap())
+            .build()
+            .expect("Failed to build OpenCL 'streaming_kernel'."));
+        
+        // Create kernels and set its arguments
+        self.collision_kernel = Some(Kernel::builder()
+            .program(self.program.as_ref().unwrap())
+            .name("collision_kernel")
+            .queue(self.queue.as_ref().unwrap().clone())
+            .global_work_size(self.N)
+            .arg(self.f_buffer.as_ref().unwrap())
+            .arg(&self.omega)
+            .build()
+            .expect("Failed to build OpenCL 'collision_kernel'."));
 
+        println!("VRAM usage: {:.2} MB", self.calculate_vram_usage() as f64 / (1024.0 * 1024.0));        
         terminal_utils::print_success("OpenCL device and context initialized successfully!");
         Ok(())
     }
@@ -280,10 +341,10 @@ impl LBM {
         Ok(())
     }
 
-    pub fn run(&mut self, time_steps: u64) {
+    pub fn run(&mut self, time_steps: usize) {
         // Print LatteLab welcome message
         terminal_utils::print_welcome_message();
-        self.time_steps = time_steps as u64;
+        self.time_steps = time_steps as usize;
         println!("{}", "-".repeat(72));
 
         // Check for errors in input parameters
@@ -297,7 +358,7 @@ impl LBM {
         terminal_utils::print_name();
         
         // Create a progress bar
-        let pb = ProgressBar::new(self.time_steps);
+        let pb = ProgressBar::new(self.time_steps as u64);
 
         // Customize the progress bar style (optional)
         pb.set_style(
@@ -331,7 +392,7 @@ impl LBM {
         let mlups = (self.N as f64 * self.time_steps as f64) / elapsed_seconds / 1_000_000.0;   // Performance in Million Lattice Updates per Second (MLUps)
 
         terminal_utils::print_metrics(
-            self.time_steps,
+            self.time_steps as u64,
             elapsed_seconds,
             mlups,  
         );
@@ -381,13 +442,13 @@ impl LBM {
 }
 
 
-pub fn n_from_xyz(x: u64, y: u64, z: u64, Nx: u64, Ny: u64) -> usize {
+pub fn n_from_xyz(x: usize, y: usize, z: usize, Nx: usize, Ny: usize) -> usize {
     (z * Ny * Nx + y * Nx + x) as usize
 }
 
-pub fn xyz_from_n(index: usize, Nx: u64, Ny: u64) -> (u64, u64, u64) {
-    let z = (index as u64) / (Ny * Nx);
-    let y = ((index as u64) % (Ny * Nx)) / Nx;
-    let x = (index as u64) % Nx;
+pub fn xyz_from_n(index: usize, Nx: usize, Ny: usize) -> (usize, usize, usize) {
+    let z = (index as usize) / (Ny * Nx);
+    let y = ((index as usize) % (Ny * Nx)) / Nx;
+    let x = (index as usize) % Nx;
     (x, y, z)
 }
