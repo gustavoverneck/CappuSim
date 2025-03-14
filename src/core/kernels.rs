@@ -57,7 +57,6 @@ constant float w[Q] = {
 #endif
 };
 
-// Streaming kernel
 __kernel void streaming_kernel(
     __global float* f, __global float* f_new) {
     // Get global IDs (node coordinates in the 3D grid)
@@ -79,9 +78,10 @@ __kernel void streaming_kernel(
         int z_nbr = z + c[i][2];
 
         // Apply periodic boundary conditions
-        x_nbr = (x_nbr + NX) % NX;
-        y_nbr = (y_nbr + NY) % NY;
-        z_nbr = (z_nbr + NZ) % NZ;
+        // Ensure the neighbors are within the bounds using modulo operation
+        x_nbr = (x_nbr + NX) % NX;  // Wrap around x within grid bounds
+        y_nbr = (y_nbr + NY) % NY;  // Wrap around y within grid bounds
+        z_nbr = (z_nbr + NZ) % NZ;  // Wrap around z within grid bounds
 
         // Calculate the linear index of the neighboring node
         int idx_nbr = x_nbr + y_nbr * NX + z_nbr * NX * NY;
@@ -92,7 +92,7 @@ __kernel void streaming_kernel(
 }
 
 // Collision kernel (BGK model)
-__kernel void collision_kernel(__global float* f, float omega) {
+__kernel void collision_kernel(__global float* f, __global float* rho, __global float* u, float omega) {
     // Get global IDs (node coordinates in the 3D grid)
     int x = get_global_id(0);
     int y = get_global_id(1);
@@ -105,28 +105,40 @@ __kernel void collision_kernel(__global float* f, float omega) {
     int idx = x + y * NX + z * NX * NY;
 
     // Calculate density and velocity (momentum)
-    float rho = 0.0;
+    float local_rho = 0.0;
     float ux = 0.0, uy = 0.0, uz = 0.0;
 
     for (int i = 0; i < Q; i++) {
-        rho += f[idx * Q + i];
+        local_rho += f[idx * Q + i];
         ux += c[i][0] * f[idx * Q + i];
         uy += c[i][1] * f[idx * Q + i];
         uz += c[i][2] * f[idx * Q + i];
     }
 
     // Normalize velocity
-    ux /= rho;
-    uy /= rho;
-    uz /= rho;
+    if (local_rho > 1.0e-10) {
+        ux /= local_rho;
+        uy /= local_rho;
+        uz /= local_rho;
+    } else {
+        ux = 0.0;
+        uy = 0.0;
+        uz = 0.0;
+    }
 
     // Calculate the equilibrium distribution function and apply the BGK model
     for (int i = 0; i < Q; i++) {
         float cu = c[i][0] * ux + c[i][1] * uy + c[i][2] * uz;
         float u2 = ux * ux + uy * uy + uz * uz;
-        float feq = w[i] * rho * (1.0 + 3.0 * cu + 4.5 * cu * cu - 1.5 * u2);
+        float feq = w[i] * local_rho * (1.0 + 3.0 * cu + 4.5 * cu * cu - 1.5 * u2);
 
         f[idx * Q + i] = f[idx * Q + i] - omega * (f[idx * Q + i] - feq);
     }
+
+    // Store the computed density and velocity
+    rho[idx] = local_rho;
+    u[idx * 3 + 0] = ux;
+    u[idx * 3 + 1] = uy;
+    u[idx * 3 + 2] = uz;
 }
-    "#;
+"#;

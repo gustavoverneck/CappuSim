@@ -11,7 +11,6 @@ use std::fs::File;
 use std::io::{self, Write, BufWriter};
 use std::path::Path;
 
-
 use crate::utils::terminal_utils;
 use crate::utils::velocity::{Velocity};
 use crate::core::kernels::LBM_KERNEL;
@@ -165,7 +164,7 @@ impl LBM {
 
         // Optimized velocity buffer creation
         let velocity_data: Vec<f32> = self.u.iter()
-        .flat_map(|v| [v.x, v.y, v.z])  // Cleaner and faster than `.collect::<Vec<_>>()`
+        .flat_map(|v| [v.x, v.y, v.z])
         .collect();
 
         self.velocity_buffer = Some(Buffer::<f32>::builder()
@@ -204,6 +203,8 @@ impl LBM {
             .queue(self.queue.as_ref().unwrap().clone())
             .global_work_size(self.N)
             .arg(self.f_buffer.as_ref().unwrap())
+            .arg(self.density_buffer.as_ref().unwrap())
+            .arg(self.velocity_buffer.as_ref().unwrap())
             .arg(&self.omega)
             .build()
             .expect("Failed to build OpenCL 'collision_kernel'."));
@@ -289,56 +290,55 @@ impl LBM {
 
     pub fn set_conditions<F>(&mut self, f: F)
     where
-        F: Fn(&mut LBM, usize, usize, usize, usize),
+        F: Fn(&mut LBM, usize, usize, usize, usize),    // x, y, z, n
     {
         for n in 0..self.N as usize {
             // Get the x, y, z coordinates from the linear index n
-            let (x, y, z) = xyz_from_n(n, self.Nx, self.Ny);
+            let (x, y, z) = xyz_from_n(&n, &self.Nx, &self.Ny, &self.Nz);
             // Call the user-defined lambda function
             f(self, x as usize, y as usize, z as usize, n);
         }
     }
 
-    pub fn collide(&mut self) {
-        if let Some(kernel) = &self.collision_kernel {
-            unsafe {
-                kernel.enq().expect("Failed to enqueue collision kernel");
-            }
-        }
-    }
-
-    pub fn stream(&mut self) {
-        if let Some(kernel) = &self.streaming_kernel {
-            unsafe {
-                kernel.enq().expect("Failed to enqueue streaming kernel");
-            }
-        }
-    }
-
     // Read data from GPU to CPU
-    fn read_from_gpu(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        // Read density buffer
-        if let Some(buffer) = &self.density_buffer {
-            buffer.read(&mut self.density).enq()?;
-            //println!("Density data read from GPU.");
-        } else {
-            terminal_utils::print_error("Density buffer not found.");
-        }
+    fn read_from_gpu(&mut self) -> Result<(), Box<dyn std::error::Error>> {    
+        // Velocity
+        let mut flat_velocity_data = vec![0.0; self.u.len() * 3]; // Create a flat buffer
+        self.velocity_buffer
+            .as_ref()
+            .unwrap()
+            .read(&mut flat_velocity_data)
+            .enq()
+            .expect("Failed to read 'velocity' buffer.");
     
-        // Read velocity buffer
-        if let Some(buffer) = &self.velocity_buffer {
-            let mut velocity_data_flat = vec![0.0; self.N as usize * 3];
-            buffer.read(&mut velocity_data_flat).enq()?;
-            self.u = velocity_data_flat
-                .chunks(3)
-                .map(|chunk| Velocity::new(chunk[0], chunk[1], chunk[2]))
-                .collect();
-            //println!("Velocity data read from GPU.");
-        } else {
-            terminal_utils::print_error("Velocity buffer not found.");
-        }
-    
+        // Map flat vector to vec<Velocity>
+        self.u_to_velocity(flat_velocity_data);
+
+        // Density
+        self.density_buffer
+        .as_ref()
+        .unwrap()
+        .read(&mut self.density)
+        .enq()
+        .expect("Failed to read 'density' buffer.");    
         Ok(())
+    }
+
+    fn velocity_to_u(&self) -> Vec<f32> {
+        self.u.iter()
+            .flat_map(|v| vec![v.x, v.y, v.z])
+            .collect()
+    }
+
+    fn u_to_velocity(&mut self, flat_velocity_data: Vec<f32>) {
+        self.u = flat_velocity_data
+            .chunks(3)
+            .map(|chunk| Velocity {
+                x: chunk[0],
+                y: chunk[1],
+                z: chunk[2],
+            })
+            .collect();
     }
 
     pub fn run(&mut self, time_steps: usize) {
@@ -374,8 +374,10 @@ impl LBM {
         // Main Loop
         for _ in 0..self.time_steps {
             // Update the simulation state
-            self.stream();
-            self.collide();
+            unsafe {
+                self.streaming_kernel.as_ref().unwrap().enq().expect("Failed to enqueue 'streaming_kernel'.");
+                self.collision_kernel.as_ref().unwrap().enq().expect("Failed to enqueue 'streaming_kernel'.");
+            }
             pb.inc(1); // Increment the progress bar by 1
         }
         // Copy buffers from GPU to CPU
@@ -407,27 +409,23 @@ impl LBM {
         let mut writer = BufWriter::new(file);
     
         // Write the header
-        writeln!(writer, "x, y, z, rho, v")?;
+        writeln!(writer, "x, y, z, rho, vx, vy, vz")?;
     
         // Iterate over the grid and write the data
-        for z in 0..self.Nz {
+        for x in 0..self.Nx {
             for y in 0..self.Ny {
-                for x in 0..self.Nx {
+                for z in 0..self.Nz {
                     // Calculate the linear index
-                    let index = n_from_xyz(x, y, z, self.Nx, self.Ny);
-    
+                    let index = n_from_xyz(&x, &y, &z, &self.Nx, &self.Ny, &self.Nz);
                     // Get density and velocity
-                    let rho = self.density[index];
+                    let rho = &self.density[index];
                     let u = &self.u[index];
-    
-                    // Calculate the absolute velocity
-                    let abs_u = (u.x.powi(2) + u.y.powi(2) + u.z.powi(2)).sqrt();
     
                     // Write the data to the file
                     writeln!(
                         writer,
-                        "{}, {}, {}, {:.6}, {:.8}", // Format floating-point numbers to 6 decimal places
-                        x, y, z, rho, abs_u
+                        "{}, {}, {}, {:.6}, {:.6}, {:.6}, {:.6}", // Format floating-point numbers to 6 decimal places
+                        x, y, z, rho, u.x, u.y, u.z
                     )?;
                 }
             }
@@ -442,13 +440,13 @@ impl LBM {
 }
 
 
-pub fn n_from_xyz(x: usize, y: usize, z: usize, Nx: usize, Ny: usize) -> usize {
-    (z * Ny * Nx + y * Nx + x) as usize
+pub fn n_from_xyz(x: &usize, y: &usize, z: &usize, Nx: &usize, Ny: &usize, Nz: &usize) -> usize {
+    z * Ny * Nx + y * Nx + x
 }
 
-pub fn xyz_from_n(index: usize, Nx: usize, Ny: usize) -> (usize, usize, usize) {
-    let z = (index as usize) / (Ny * Nx);
-    let y = ((index as usize) % (Ny * Nx)) / Nx;
-    let x = (index as usize) % Nx;
+pub fn xyz_from_n(n: &usize, Nx: &usize, Ny: &usize, Nz: &usize) -> (usize, usize, usize) {
+    let z = (*n as usize) / (Ny * Nx);
+    let y = ((*n as usize) % (Ny * Nx)) / Nx;
+    let x = (*n as usize) % Nx;
     (x, y, z)
 }
