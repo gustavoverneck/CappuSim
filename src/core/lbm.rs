@@ -2,7 +2,8 @@
 
 //#![allow(unused)]           // Allow unused imports and warnings
 #![allow(non_snake_case)]   // Allow non-snake_case naming convention
-use ocl::{Platform, Device, Context, Queue, Program, Buffer, Kernel};
+use ocl::{Platform, Device, Context, Queue, Program, Buffer, Kernel, ProQue};
+use ocl::flags::MEM_READ_WRITE;
 use std::error::Error;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::thread;
@@ -11,6 +12,7 @@ use std::fs::File;
 use std::io::{self, Write, BufWriter};
 use std::path::Path;
 use std::mem::swap;
+use plotters::prelude::*;
 use crate::utils::terminal_utils;
 use crate::utils::velocity::{Velocity};
 use crate::core::kernels::LBM_KERNEL;
@@ -125,9 +127,10 @@ impl LBM {
                 #define NX {}
                 #define NY {}
                 #define NZ {}
+                #define N {}
                 #define Q {}
                 #define {}
-                {}"#, self.Nx, self.Ny, self.Nz, self.Q, self.model.as_str(), LBM_KERNEL);
+                {}"#, self.Nx, self.Ny, self.Nz, self.N, self.Q, self.model.as_str(), LBM_KERNEL);
         //println!("{}", kernel_source); //Debug: print final kernel
 
         // Define OpenCL program
@@ -140,24 +143,24 @@ impl LBM {
         // Create buffers
         self.f_buffer = Some(Buffer::<f32>::builder()
         .queue(self.queue.as_ref().unwrap().clone())
-        .flags(ocl::flags::MEM_READ_WRITE)
-        .len(self.f.len()) // Ensures correct buffer size for 'f'
+        .flags(MEM_READ_WRITE)
+        .len(self.N * self.Q) // Ensures correct buffer size for 'f'
         .copy_host_slice(&self.f)
         .build()
         .expect("Failed to build 'f' buffer."));
 
         self.f_new_buffer = Some(Buffer::<f32>::builder()
         .queue(self.queue.as_ref().unwrap().clone())
-        .flags(ocl::flags::MEM_READ_WRITE)
-        .len(self.u.len() * self.Q) // Ensures correct buffer size for 'f_new'
+        .flags(MEM_READ_WRITE)
+        .len(self.N * self.Q) // Ensures correct buffer size for 'f_new'
         .copy_host_slice(&self.f_new)
         .build()
         .expect("Failed to build 'f_new' buffer."));
 
         self.density_buffer = Some(Buffer::<f32>::builder()
         .queue(self.queue.as_ref().unwrap().clone())
-        .flags(ocl::flags::MEM_READ_WRITE)
-        .len(self.density.len()) // Correct size for 'density'
+        .flags(MEM_READ_WRITE)
+        .len(self.N) // Correct size for 'density'
         .copy_host_slice(&self.density)
         .build()
         .expect("Failed to build 'density' buffer."));
@@ -169,8 +172,8 @@ impl LBM {
 
         self.velocity_buffer = Some(Buffer::<f32>::builder()
         .queue(self.queue.as_ref().unwrap().clone())
-        .flags(ocl::flags::MEM_READ_WRITE)
-        .len(velocity_data.len()) // Corrected size — directly matches velocity data length
+        .flags(MEM_READ_WRITE)
+        .len(self.N * 3) // Corrected size — directly matches velocity data length
         .copy_host_slice(&velocity_data)
         .build()
         .expect("Failed to build 'velocity' buffer."));
@@ -178,8 +181,8 @@ impl LBM {
         // Corrected flags buffer size
         self.flags_buffer = Some(Buffer::<u8>::builder()
         .queue(self.queue.as_ref().unwrap().clone())
-        .flags(ocl::flags::MEM_READ_WRITE)
-        .len(self.flags.len()) // Corrected size for 'flags'
+        .flags(MEM_READ_WRITE)
+        .len(self.N) // Corrected size for 'flags'
         .copy_host_slice(&self.flags)
         .build()
         .expect("Failed to build 'flags' buffer."));
@@ -442,29 +445,29 @@ impl LBM {
         let start_time = Instant::now();
 
         // Main Loop
-        for _ in 0..self.time_steps {
+        for t in 0..self.time_steps {
             // Execute kernels
             unsafe {
-                self.streaming_kernel.as_ref().unwrap().enq().expect("Failed to enqueue 'streaming_kernel'.");
-                self.queue.as_ref().unwrap().finish().expect("Queue finish failed.");
                 self.collision_kernel.as_ref().unwrap().enq().expect("Failed to enqueue 'collision_kernel'.");
                 self.queue.as_ref().unwrap().finish().expect("Queue finish failed.");
             }
-        
-            // Swap f and f_new buffers
+            unsafe {
+                self.streaming_kernel.as_ref().unwrap().enq().expect("Failed to enqueue 'streaming_kernel'.");
+                self.queue.as_ref().unwrap().finish().expect("Queue finish failed.");
+            }
+            
+            // Swap buffers
             swap(&mut self.f_buffer, &mut self.f_new_buffer);
-        
+                    
             pb.inc(1); // Increment the progress bar by 1
+            
+            // Copy buffers from GPU to CPU
+            self.read_from_gpu().expect("Failed to read data from GPU.");
+            if t % 50 == 0 {
+                self.output_to(&format!("output/data{}.csv", t))
+                    .expect("Failed to write output data.");
+            }
         }
-        // End queue
-        self.queue.as_ref().unwrap().finish().expect("Queue finish failed.");
-
-        // Copy buffers from GPU to CPU
-        self.read_from_gpu().expect("Failed to read data from GPU.");
-
-
-        // Finish the progress bar
-        pb.finish_with_message("Done!");
 
         // Calculate total execution time
         let elapsed_time = start_time.elapsed();
@@ -508,7 +511,7 @@ impl LBM {
         (vorticity_x * vorticity_x + vorticity_y * vorticity_y + vorticity_z * vorticity_z).sqrt()
     }
 
-    pub fn output_to(&mut self, path: &str) -> Result<(), Box<dyn Error>> {
+    pub fn output_to(&self, path: &str) -> Result<(), Box<dyn Error>> {
         if self.found_errors {
             return Err("Errors were found in the input parameters. Cannot write output.".into());
         }
@@ -545,9 +548,35 @@ impl LBM {
         // Flush the buffer to ensure all data is written to the file
         writer.flush()?;
     
-        println!("Simulation results have been written to {}", path);
+        //println!("Simulation results have been written to {}", path);
         Ok(())
     }
+
+    pub fn get_density(&self) -> Vec<f32> {
+        if let Some(buffer) = &self.density_buffer {
+            let mut density_data = vec![0.0; self.N];
+            buffer.read(&mut density_data).enq().expect("Failed to read 'density' buffer.");
+            return density_data;
+        }
+        vec![] // Return an empty vector if the buffer is not available
+    }
+
+    pub fn get_velocity(&self) -> Vec<Velocity> {
+        if let Some(buffer) = &self.velocity_buffer {
+            let mut velocity_data = vec![0.0; self.N * 3];
+            buffer.read(&mut velocity_data).enq().expect("Failed to read 'velocity' buffer.");
+            return velocity_data
+                .chunks(3)
+                .map(|chunk| Velocity {
+                    x: chunk[0],
+                    y: chunk[1],
+                    z: chunk[2],
+                })
+                .collect();
+        }
+        vec![] // Return an empty vector if the buffer is not available
+    }
+    
 }
 
 

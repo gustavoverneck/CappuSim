@@ -16,3 +16,4 @@ authors = ["Gustavo A. Verneck"]  # The authors of the crate
 ocl = "0.19"
 colored = "2.1.0"
 indicatif = "0.17"
+plotters = "0.3.4"
