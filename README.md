@@ -14,7 +14,7 @@ The library is **Open Source**, and contributions are highly encouraged. Whether
 **LatteLab** is currently in **pre-alpha** version and **not yet functional**. A working **alpha version** will be available soon. Stay tuned!  
 
 ## Installation  
-To use CappuSim, you will need to install specific versions of **cargo**, **rustc** and **ocl**: 
+To use LatteLab, you will need to install specific versions of **cargo**, **rustc** and **ocl**: 
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
