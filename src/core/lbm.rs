@@ -11,10 +11,14 @@ use std::time::{Duration, Instant};
 use std::fs::File;
 use std::io::{self, Write, BufWriter};
 use std::path::Path;
-use std::mem::swap;
 use crate::utils::terminal_utils;
 use crate::utils::velocity::{Velocity};
 use crate::core::kernels::LBM_KERNEL;
+
+// LBM FLAGS
+pub const FLAG_FLUID: u8 = 0;
+pub const FLAG_SOLID: u8 = 1;
+pub const FLAG_EQ: u8 = 2;
 
 pub struct LBM {
     pub Nx: usize,
@@ -44,6 +48,7 @@ pub struct LBM {
     program: Option<Program>,
     streaming_kernel: Option<Kernel>,
     collision_kernel: Option<Kernel>,
+    copy_kernel: Option<Kernel>,
     found_errors: bool,
 }
 
@@ -91,6 +96,7 @@ impl LBM {
             program: None,
             streaming_kernel: None,
             collision_kernel: None,
+            copy_kernel: None,
             found_errors: false,
         }
     }
@@ -121,15 +127,18 @@ impl LBM {
             .expect("Failed to create command queue."));
 
         // Write defines on kernel
-        let kernel_source = format!(
-                                r#"
-                #define NX {}
-                #define NY {}
-                #define NZ {}
-                #define N {}
-                #define Q {}
-                #define {}
-                {}"#, self.Nx, self.Ny, self.Nz, self.N, self.Q, self.model.as_str(), LBM_KERNEL);
+        let kernel_source = format!(r#"
+        #define NX {}
+        #define NY {}
+        #define NZ {}
+        #define N {}
+        #define Q {}
+        #define {}
+        #define FLAG_FLUID {}
+        #define FLAG_SOLID {}
+        #define FLAG_EQ {}
+        {}
+        "#, self.Nx, self.Ny, self.Nz, self.N, self.Q, self.model.as_str(), FLAG_FLUID, FLAG_SOLID, FLAG_EQ, LBM_KERNEL);
         //println!("{}", kernel_source); //Debug: print final kernel
 
         // Define OpenCL program
@@ -141,12 +150,12 @@ impl LBM {
 
         // Create buffers
         self.f_buffer = Some(Buffer::<f32>::builder()
-        .queue(self.queue.as_ref().unwrap().clone())
-        .flags(MEM_READ_WRITE)
-        .len(self.N * self.Q) // Ensures correct buffer size for 'f'
-        .copy_host_slice(&self.f)
-        .build()
-        .expect("Failed to build 'f' buffer."));
+            .queue(self.queue.as_ref().unwrap().clone())
+            .flags(MEM_READ_WRITE)
+            .len(self.N * self.Q) // Ensures correct buffer size for 'f'
+            .copy_host_slice(&self.f)
+            .build()
+            .expect("Failed to build 'f' buffer."));
 
         self.f_new_buffer = Some(Buffer::<f32>::builder()
         .queue(self.queue.as_ref().unwrap().clone())
@@ -186,7 +195,6 @@ impl LBM {
         .build()
         .expect("Failed to build 'flags' buffer."));
 
-
         // Create kernels and set its arguments
         self.streaming_kernel = Some(Kernel::builder()
             .program(self.program.as_ref().unwrap())
@@ -195,6 +203,7 @@ impl LBM {
             .global_work_size(self.N)
             .arg(self.f_buffer.as_ref().unwrap())
             .arg(self.f_new_buffer.as_ref().unwrap())
+            .arg(self.flags_buffer.as_ref().unwrap())
             .build()
             .expect("Failed to build OpenCL 'streaming_kernel'."));
         
@@ -205,11 +214,23 @@ impl LBM {
             .queue(self.queue.as_ref().unwrap().clone())
             .global_work_size(self.N)
             .arg(self.f_buffer.as_ref().unwrap())
+            .arg(self.flags_buffer.as_ref().unwrap())
             .arg(self.density_buffer.as_ref().unwrap())
             .arg(self.velocity_buffer.as_ref().unwrap())
             .arg(&self.omega)
             .build()
             .expect("Failed to build OpenCL 'collision_kernel'."));
+        
+        // Create swap kernel and set its arguments
+        self.copy_kernel = Some(Kernel::builder()
+            .program(self.program.as_ref().unwrap())
+            .name("copy")
+            .queue(self.queue.as_ref().unwrap().clone())
+            .global_work_size(self.N)
+            .arg(self.f_buffer.as_ref().unwrap())
+            .arg(self.f_new_buffer.as_ref().unwrap())
+            .build()
+            .expect("Failed to build OpenCL 'copy_kernel'."));
 
         println!("VRAM usage: {:.2} MB", self.calculate_vram_usage() as f64 / (1024.0 * 1024.0));        
         terminal_utils::print_success("OpenCL device and context initialized successfully!");
@@ -316,24 +337,24 @@ impl LBM {
     // Read data from GPU to CPU
     fn read_from_gpu(&mut self) -> Result<(), Box<dyn Error>> {
         // Velocity
-        let mut flat_velocity_data = vec![0.0; self.u.len() * 3]; // Create a flat buffer
+        let mut flat_velocity_data = vec![0.0; self.u.len() * 3]; // Flat buffer for velocity
         self.velocity_buffer
             .as_ref()
-            .unwrap()
+            .ok_or("Velocity buffer is None")?
             .read(&mut flat_velocity_data)
             .enq()
-            .expect("Failed to read 'velocity' buffer.");
+            .map_err(|e| format!("Failed to read 'velocity' buffer: {}", e))?;
     
-        // Map flat vector to vec<Velocity>
         self.u_to_velocity(flat_velocity_data);
-
+    
         // Density
         self.density_buffer
-        .as_ref()
-        .unwrap()
-        .read(&mut self.density)
-        .enq()
-        .expect("Failed to read 'density' buffer.");    
+            .as_ref()
+            .ok_or("Density buffer is None")?
+            .read(&mut self.density)
+            .enq()
+            .map_err(|e| format!("Failed to read 'density' buffer: {}", e))?;
+    
         Ok(())
     }
 
@@ -446,17 +467,24 @@ impl LBM {
         // Main Loop
         for t in 0..self.time_steps {
             // Execute kernels
+            // Collision process
             unsafe {
                 self.collision_kernel.as_ref().unwrap().enq().expect("Failed to enqueue 'collision_kernel'.");
                 self.queue.as_ref().unwrap().finish().expect("Queue finish failed.");
             }
+            // Streaming process
             unsafe {
                 self.streaming_kernel.as_ref().unwrap().enq().expect("Failed to enqueue 'streaming_kernel'.");
                 self.queue.as_ref().unwrap().finish().expect("Queue finish failed.");
             }
+            // Swap f and f_new after streaming
+            unsafe {
+                self.copy_kernel.as_ref().unwrap().enq().expect("Failed to enqueue 'copy_kernel'.");
+                self.queue.as_ref().unwrap().finish().expect("Queue finish failed.");
+            }
             
             // Swap buffers
-            swap(&mut self.f_buffer, &mut self.f_new_buffer);
+            //std::mem::swap(&mut self.f_buffer, &mut self.f_new_buffer);
             
             // Debug output data
             // if t % 100 == 0 {
@@ -467,7 +495,7 @@ impl LBM {
             //     }
 
             //     // Export data to output.csv
-            //     if let Err(err) = self.output_to("output.csv") {
+            //     if let Err(err) = self.output_to(&format!("output/output{}.csv", &t)) {
             //         terminal_utils::print_error(&format!("Error exporting data: {}", err));
             //         return;
             //     }
