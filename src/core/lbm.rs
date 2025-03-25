@@ -11,8 +11,6 @@ use std::time::{Duration, Instant};
 use std::fs::File;
 use std::io::{self, Write, BufWriter};
 use std::path::Path;
-use std::mem::swap;
-use plotters::prelude::*;
 use crate::utils::terminal_utils;
 use crate::utils::velocity::{Velocity};
 use crate::core::kernels::LBM_KERNEL;
