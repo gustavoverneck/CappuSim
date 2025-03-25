@@ -14,7 +14,7 @@ fn main() {
     let nx = 512;
 
     // Initialize LBM simulation
-    let mut lbm = LBM::new(nx, nx, 1, "D2Q9".to_string(), 0.7);
+    let mut lbm = LBM::new(nx, nx, 1, "D2Q9".to_string(), 0.1);
     // Set initial conditions
     lbm.set_conditions(|lbm, x, y, z, n| {
         let pi = std::f32::consts::PI;
@@ -26,5 +26,5 @@ fn main() {
 
     lbm.run(10000);
 
-    //lbm.output_to("output.csv").expect("Failed to write output file.");
+    lbm.output_to("output.csv").expect("Failed to write output file.");
 }

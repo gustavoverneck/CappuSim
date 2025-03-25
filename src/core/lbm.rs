@@ -11,6 +11,7 @@ use std::time::{Duration, Instant};
 use std::fs::File;
 use std::io::{self, Write, BufWriter};
 use std::path::Path;
+use std::mem::swap;
 use crate::utils::terminal_utils;
 use crate::utils::velocity::{Velocity};
 use crate::core::kernels::LBM_KERNEL;
@@ -456,16 +457,25 @@ impl LBM {
             
             // Swap buffers
             swap(&mut self.f_buffer, &mut self.f_new_buffer);
-                    
-            pb.inc(1); // Increment the progress bar by 1
             
-            // Copy buffers from GPU to CPU
-            self.read_from_gpu().expect("Failed to read data from GPU.");
-            if t % 50 == 0 {
-                self.output_to(&format!("output/data{}.csv", t))
-                    .expect("Failed to write output data.");
-            }
+            // Debug output data
+            // if t % 100 == 0 {
+            //     // Read data from GPU to CPU
+            //     if let Err(err) = self.read_from_gpu() {
+            //         terminal_utils::print_error(&format!("Error reading data from GPU: {}", err));
+            //         return;
+            //     }
+
+            //     // Export data to output.csv
+            //     if let Err(err) = self.output_to("output.csv") {
+            //         terminal_utils::print_error(&format!("Error exporting data: {}", err));
+            //         return;
+            //     }
+            // }
+            
+            pb.inc(1); // Increment the progress bar by 1
         }
+        pb.finish_with_message("");
 
         // Calculate total execution time
         let elapsed_time = start_time.elapsed();
@@ -509,6 +519,52 @@ impl LBM {
         (vorticity_x * vorticity_x + vorticity_y * vorticity_y + vorticity_z * vorticity_z).sqrt()
     }
 
+    fn calculate_q_criteria(&self, x: usize, y: usize, z: usize) -> f32 {
+        let dx = 1.0; // Grid spacing in x-direction
+        let dy = 1.0; // Grid spacing in y-direction
+        let dz = 1.0; // Grid spacing in z-direction
+
+        let get_velocity = |x, y, z| {
+            if x >= self.Nx || y >= self.Ny || z >= self.Nz {
+                Velocity::zero()
+            } else {
+                let index = n_from_xyz(&x, &y, &z, &self.Nx, &self.Ny, &self.Nz);
+                self.u[index]
+            }
+        };
+
+        let du_dx = (get_velocity(x + 1, y, z).x - get_velocity(x.saturating_sub(1), y, z).x) / (2.0 * dx);
+        let du_dy = (get_velocity(x, y + 1, z).x - get_velocity(x, y.saturating_sub(1), z).x) / (2.0 * dy);
+        let du_dz = (get_velocity(x, y, z + 1).x - get_velocity(x, y, z.saturating_sub(1)).x) / (2.0 * dz);
+
+        let dv_dx = (get_velocity(x + 1, y, z).y - get_velocity(x.saturating_sub(1), y, z).y) / (2.0 * dx);
+        let dv_dy = (get_velocity(x, y + 1, z).y - get_velocity(x, y.saturating_sub(1), z).y) / (2.0 * dy);
+        let dv_dz = (get_velocity(x, y, z + 1).y - get_velocity(x, y, z.saturating_sub(1)).y) / (2.0 * dz);
+
+        let dw_dx = (get_velocity(x + 1, y, z).z - get_velocity(x.saturating_sub(1), y, z).z) / (2.0 * dx);
+        let dw_dy = (get_velocity(x, y + 1, z).z - get_velocity(x, y.saturating_sub(1), z).z) / (2.0 * dy);
+        let dw_dz = (get_velocity(x, y, z + 1).z - get_velocity(x, y, z.saturating_sub(1)).z) / (2.0 * dz);
+
+        // Symmetric part of the velocity gradient tensor (strain rate tensor)
+        let s_xx = du_dx;
+        let s_yy = dv_dy;
+        let s_zz = dw_dz;
+        let s_xy = 0.5 * (du_dy + dv_dx);
+        let s_xz = 0.5 * (du_dz + dw_dx);
+        let s_yz = 0.5 * (dv_dz + dw_dy);
+
+        // Anti-symmetric part of the velocity gradient tensor (vorticity tensor)
+        let w_xy = 0.5 * (du_dy - dv_dx);
+        let w_xz = 0.5 * (du_dz - dw_dx);
+        let w_yz = 0.5 * (dv_dz - dw_dy);
+
+        // Q-criteria: Q = 0.5 * (||W||^2 - ||S||^2)
+        let norm_s = s_xx * s_xx + s_yy * s_yy + s_zz * s_zz + 2.0 * (s_xy * s_xy + s_xz * s_xz + s_yz * s_yz);
+        let norm_w = 2.0 * (w_xy * w_xy + w_xz * w_xz + w_yz * w_yz);
+
+        0.5 * (norm_w - norm_s)
+    }
+
     pub fn output_to(&self, path: &str) -> Result<(), Box<dyn Error>> {
         if self.found_errors {
             return Err("Errors were found in the input parameters. Cannot write output.".into());
@@ -518,7 +574,7 @@ impl LBM {
         let mut writer = BufWriter::new(file);
         
         // Write the header
-        writeln!(writer, "x, y, z, rho,      ux,       uy,       uz,       v")?;
+        writeln!(writer, "x, y, z, rho,      ux,       uy,       uz,       v,       q")?;
         
         // Iterate over the grid and write the data
         for x in 0..self.Nx {
@@ -532,12 +588,12 @@ impl LBM {
                 
                 // Calculate vorticity
                 let vorticity = self.calculate_vorticity(x, y, z);
-        
+                let q_criteria = self.calculate_q_criteria(x, y, z);
                 // Write the data to the file
                 writeln!(
                 writer,
-                "{}, {}, {}, {:.6}, {:.6}, {:.6}, {:.6}, {:.6}", // Format floating-point numbers to 6 decimal places
-                x, y, z, rho, u.x, u.y, u.z, vorticity
+                "{}, {}, {}, {:.6}, {:.6}, {:.6}, {:.6}, {:.6}, {:.6}", // Format floating-point numbers to 6 decimal places
+                x, y, z, rho, u.x, u.y, u.z, vorticity, q_criteria
                 )?;
             }
             }
