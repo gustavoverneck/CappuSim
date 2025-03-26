@@ -46,6 +46,7 @@
 /// - `rho`: Density array.
 /// - `flags`: Flags array indicating boundary conditions.
 /// - `u`: Velocity array.
+
 pub const LBM_KERNEL: &str = r#"
 // Velocity vectors (D2Q9, D3Q7, D3Q15, D3Q19, D3Q27)
 constant int c[Q][3] = {
@@ -144,15 +145,18 @@ __kernel void streaming_kernel(
         int yn = y + dy;
         int zn = z + dz;
 
-        // Check if the neighboring node is outside the domain boundaries
-        bool is_boundary = (xn < 0) | (xn >= NX) | (yn < 0) | (yn >= NY) | (zn < 0) | (zn >= NZ);
-        int neighbor = zn * (NX * NY) + yn * NX + xn; // Linear index of the neighbor
+         // Compute linear index of the neighbor
+        bool is_boundary = (xn < 0) | (xn >= NX) | 
+                           (yn < 0) | (yn >= NY) | 
+                           (zn < 0) | (zn >= NZ);
+        int neighbor = zn * (NX * NY) + yn * NX + xn;
 
+        // Ensure the neighbor index is within valid bounds before accessing memory
         if (is_boundary || flags[neighbor] == FLAG_SOLID) {
-            // If the neighbor is a boundary or solid node, apply bounce-back
+            // Bounce-back condition
             f_new[n * Q + opposite[q]] = f[n * Q + q];
         } else {
-            // Otherwise, stream the distribution function to the neighbor
+            // Stream distribution function to the neighbor
             f_new[neighbor * Q + q] = f[n * Q + q];
         }
     }
@@ -185,7 +189,7 @@ __kernel void collision_kernel(
     }
 
     // Normalize velocity components if density is non-zero
-    if (local_rho > 1e-6f) {
+    if (local_rho > 1e-10f) {
         ux /= local_rho;
         uy /= local_rho;
         uz /= local_rho;
@@ -240,7 +244,7 @@ __kernel void copy(__global float* f, __global float* f_new) {
     int n = get_global_id(0);
 
     // Check if the thread is within the grid boundaries
-    if (n >= N) return;
+    if (n >= N * Q) return;
 
     // Copy the value from the new distribution function array to the original array
     f[n] = f_new[n];
@@ -251,7 +255,6 @@ __kernel void copy(__global float* f, __global float* f_new) {
 __kernel void equilibrium(
     __global float* f,        // Distribution function array
     __global float* rho,      // Density array
-    __global int* flags,      // Flags array to indicate boundary conditions
     __global float* u         // Velocity array
 ) {
     // Get the global ID of the current thread
