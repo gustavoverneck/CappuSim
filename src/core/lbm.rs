@@ -11,8 +11,8 @@ use std::time::{Duration, Instant};
 use std::fs::File;
 use std::io::{self, Write, BufWriter};
 use std::path::Path;
+use crate::utils::velocity::Velocity;
 use crate::utils::terminal_utils;
-use crate::utils::velocity::{Velocity};
 use crate::core::kernels::LBM_KERNEL;
 
 // LBM FLAGS
@@ -34,12 +34,13 @@ pub struct LBM {
     f: Vec<f32>,
     f_new: Vec<f32>,
     pub density: Vec<f32>,
-    pub u: Vec<Velocity>,
+    u: Vec<f32>,
+    pub velocity: Vec<Velocity>,
     pub flags: Vec<u8>,
     f_buffer: Option<Buffer<f32>>,
     f_new_buffer: Option<Buffer<f32>>,
     density_buffer: Option<Buffer<f32>>,
-    velocity_buffer: Option<Buffer<f32>>,
+    u_buffer: Option<Buffer<f32>>,
     flags_buffer: Option<Buffer<u8>>,
     platform: Option<Platform>,
     device: Option<Device>,
@@ -49,7 +50,9 @@ pub struct LBM {
     streaming_kernel: Option<Kernel>,
     collision_kernel: Option<Kernel>,
     copy_kernel: Option<Kernel>,
+    equilibrium_kernel: Option<Kernel>,
     found_errors: bool,
+    output_interval: usize,
 }
 
 impl LBM {
@@ -63,6 +66,14 @@ impl LBM {
             "D3Q27" => 27,
             _ => panic!("Unsupported model: {}", model),
         };
+        let D = match model.clone().as_str() {
+            "D2Q9" => 2,
+            "D3Q7" => 3,
+            "D3Q15" => 3,
+            "D3Q19" => 3,
+            "D3Q27" => 3,
+            _ => panic!("Unsupported model: {}", model),
+        };
 
         LBM {
             Nx,
@@ -70,11 +81,7 @@ impl LBM {
             Nz,
             N: size,
             model: model.clone(),
-            D: match model.clone().as_str() {
-                "D2Q9" => 2,
-                "D3Q7" | "D3Q15" | "D3Q19" | "D3Q27" => 3,
-                _ => panic!("Unsupported model: {}", model),
-            },
+            D,
             Q,
             viscosity,
             omega: 1.0 / (3.0 * viscosity + 0.5),
@@ -82,12 +89,13 @@ impl LBM {
             f: vec![0.0; size * Q],
             f_new: vec![0.0; size * Q],
             density: vec![1.0; size],   // Initialize density to 1.0
-            u: vec![Velocity::zero(); size], // Initialize velocity to zero
+            u: vec![0.0; size * 3], // Initialize velocity to zero (size * 3 for 3 components per grid point)
+            velocity: vec![Velocity::zero(); size], // Initialize input velocity to zero
             flags: vec![0; size],       // Initialize flags to 0 (fluid)
             f_buffer: None,
             f_new_buffer: None,
             density_buffer: None,
-            velocity_buffer: None,
+            u_buffer: None,
             flags_buffer: None,
             platform: None,
             device: None,
@@ -97,7 +105,9 @@ impl LBM {
             streaming_kernel: None,
             collision_kernel: None,
             copy_kernel: None,
+            equilibrium_kernel: None,
             found_errors: false,
+            output_interval: 0,
         }
     }
 
@@ -148,7 +158,7 @@ impl LBM {
             .build(self.context.as_ref().unwrap())
             .expect("Failed to build program."));
 
-        // Create buffers
+        // Create f buffer
         self.f_buffer = Some(Buffer::<f32>::builder()
             .queue(self.queue.as_ref().unwrap().clone())
             .flags(MEM_READ_WRITE)
@@ -157,6 +167,7 @@ impl LBM {
             .build()
             .expect("Failed to build 'f' buffer."));
 
+        // Create f_new buffer
         self.f_new_buffer = Some(Buffer::<f32>::builder()
         .queue(self.queue.as_ref().unwrap().clone())
         .flags(MEM_READ_WRITE)
@@ -165,6 +176,7 @@ impl LBM {
         .build()
         .expect("Failed to build 'f_new' buffer."));
 
+        // Create density buffer
         self.density_buffer = Some(Buffer::<f32>::builder()
         .queue(self.queue.as_ref().unwrap().clone())
         .flags(MEM_READ_WRITE)
@@ -172,21 +184,17 @@ impl LBM {
         .copy_host_slice(&self.density)
         .build()
         .expect("Failed to build 'density' buffer."));
-
-        // Optimized velocity buffer creation
-        let velocity_data: Vec<f32> = self.u.iter()
-        .flat_map(|v| [v.x, v.y, v.z])
-        .collect();
-
-        self.velocity_buffer = Some(Buffer::<f32>::builder()
+        
+        // Create velocity buffer
+        self.u_buffer = Some(Buffer::<f32>::builder()
         .queue(self.queue.as_ref().unwrap().clone())
         .flags(MEM_READ_WRITE)
-        .len(self.N * 3) // Corrected size — directly matches velocity data length
-        .copy_host_slice(&velocity_data)
+        .len(self.N * 3)
+        .copy_host_slice(&self.u)
         .build()
         .expect("Failed to build 'velocity' buffer."));
 
-        // Corrected flags buffer size
+        // Create kernels and set its arguments
         self.flags_buffer = Some(Buffer::<u8>::builder()
         .queue(self.queue.as_ref().unwrap().clone())
         .flags(MEM_READ_WRITE)
@@ -216,7 +224,7 @@ impl LBM {
             .arg(self.f_buffer.as_ref().unwrap())
             .arg(self.flags_buffer.as_ref().unwrap())
             .arg(self.density_buffer.as_ref().unwrap())
-            .arg(self.velocity_buffer.as_ref().unwrap())
+            .arg(self.u_buffer.as_ref().unwrap())
             .arg(&self.omega)
             .build()
             .expect("Failed to build OpenCL 'collision_kernel'."));
@@ -226,11 +234,24 @@ impl LBM {
             .program(self.program.as_ref().unwrap())
             .name("copy")
             .queue(self.queue.as_ref().unwrap().clone())
-            .global_work_size(self.N)
+            .global_work_size(self.N * self.Q)
             .arg(self.f_buffer.as_ref().unwrap())
             .arg(self.f_new_buffer.as_ref().unwrap())
             .build()
             .expect("Failed to build OpenCL 'copy_kernel'."));
+
+        // Create equilibrium kernel for initial conditions
+        self.equilibrium_kernel = Some(Kernel::builder()
+            .program(self.program.as_ref().unwrap())
+            .name("equilibrium")
+            .queue(self.queue.as_ref().unwrap().clone())
+            .global_work_size(self.N)
+            .arg(self.f_buffer.as_ref().unwrap())
+            .arg(self.density_buffer.as_ref().unwrap())
+            .arg(self.flags_buffer.as_ref().unwrap())
+            .arg(self.u_buffer.as_ref().unwrap())
+            .build()
+            .expect("Failed to build OpenCL 'equilibrium_kernel'."));
 
         println!("VRAM usage: {:.2} MB", self.calculate_vram_usage() as f64 / (1024.0 * 1024.0));        
         terminal_utils::print_success("OpenCL device and context initialized successfully!");
@@ -257,7 +278,7 @@ impl LBM {
         }
 
         // Add size of velocity buffer
-        if let Some(buffer) = &self.velocity_buffer {
+        if let Some(buffer) = &self.u_buffer {
             total_vram += buffer.len() * size_of::<f32>();
         }
 
@@ -302,9 +323,9 @@ impl LBM {
             self.found_errors = true;
             return Err("Density vector has incorrect length.".into());
         }
-        if self.u.len() != expected_size {
+        if self.u.len() != expected_size * 3 {
             self.found_errors = true;
-            return Err("Velocity vector has incorrect length.".into());
+            return Err("Velocity vector has incorrect length. Expected size * 3.".into());
         }
         if self.flags.len() != expected_size {
             self.found_errors = true;
@@ -332,20 +353,19 @@ impl LBM {
             // Call the user-defined lambda function
             f(self, x, y, z, n);
         }
+        self.u = self.velocity_to_u(); // Transform 3D array to Flattened array
+        self.velocity = vec![Velocity::zero(); 0];
     }
 
     // Read data from GPU to CPU
-    fn read_from_gpu(&mut self) -> Result<(), Box<dyn Error>> {
+    fn read_from_gpu(&mut self) -> Result<(), Box<dyn Error>> {        
         // Velocity
-        let mut flat_velocity_data = vec![0.0; self.u.len() * 3]; // Flat buffer for velocity
-        self.velocity_buffer
+        self.u_buffer
             .as_ref()
             .ok_or("Velocity buffer is None")?
-            .read(&mut flat_velocity_data)
+            .read(&mut self.u)
             .enq()
             .map_err(|e| format!("Failed to read 'velocity' buffer: {}", e))?;
-    
-        self.u_to_velocity(flat_velocity_data);
     
         // Density
         self.density_buffer
@@ -356,72 +376,6 @@ impl LBM {
             .map_err(|e| format!("Failed to read 'density' buffer: {}", e))?;
     
         Ok(())
-    }
-
-    fn velocity_to_u(&self) -> Vec<f32> {
-        self.u.iter()
-            .flat_map(|v| vec![v.x, v.y, v.z])
-            .collect()
-    }
-
-    fn u_to_velocity(&mut self, flat_velocity_data: Vec<f32>) {
-        self.u = flat_velocity_data
-            .chunks(3)
-            .map(|chunk| Velocity {
-                x: chunk[0],
-                y: chunk[1],
-                z: chunk[2],
-            })
-            .collect();
-    }
-
-    fn equilibrium(&self, rho: &f32, u: &Velocity, i: usize) -> f32 {
-        let c: &[[i32; 3]] = match self.model.as_str() {
-            "D2Q9" => &[
-                [0, 0, 0], [1, 0, 0], [0, 1, 0], [-1, 0, 0], [0, -1, 0],
-                [1, 1, 0], [-1, 1, 0], [-1, -1, 0], [1, -1, 0]
-            ],
-            "D3Q7" => &[
-                [0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1],
-                [-1, 0, 0], [0, -1, 0], [0, 0, -1]
-            ],
-            "D3Q15" => &[
-                [0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1],
-                [-1, 0, 0], [0, -1, 0], [0, 0, -1], [1, 1, 0],
-                [-1, 1, 0], [-1, -1, 0], [1, -1, 0], [1, 0, 1],
-                [-1, 0, 1], [-1, 0, -1], [1, 0, -1]
-            ],
-            "D3Q19" => &[
-                [0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1],
-                [-1, 0, 0], [0, -1, 0], [0, 0, -1], [1, 1, 0],
-                [-1, 1, 0], [-1, -1, 0], [1, -1, 0], [1, 0, 1],
-                [-1, 0, 1], [-1, 0, -1], [1, 0, -1], [0, 1, 1],
-                [0, -1, 1], [0, -1, -1], [0, 1, -1]
-            ],
-            "D3Q27" => &[
-                [0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1],
-                [-1, 0, 0], [0, -1, 0], [0, 0, -1], [1, 1, 0],
-                [-1, 1, 0], [-1, -1, 0], [1, -1, 0], [1, 0, 1],
-                [-1, 0, 1], [-1, 0, -1], [1, 0, -1], [0, 1, 1],
-                [0, -1, 1], [0, -1, -1], [0, 1, -1], [1, 1, 1],
-                [-1, 1, 1], [-1, -1, 1], [1, -1, 1], [1, 1, -1],
-                [-1, 1, -1], [-1, -1, -1], [1, -1, -1]
-            ],
-            _ => panic!("Unsupported model: {}", self.model),
-        };
-
-        let w: &[f32] = match self.model.as_str() {
-            "D2Q9" => &[4.0 / 9.0, 1.0 / 9.0, 1.0 / 9.0, 1.0 / 9.0, 1.0 / 9.0, 1.0 / 36.0, 1.0 / 36.0, 1.0 / 36.0, 1.0 / 36.0],
-            "D3Q7" => &[1.0 / 4.0, 1.0 / 8.0, 1.0 / 8.0, 1.0 / 8.0, 1.0 / 8.0, 1.0 / 8.0, 1.0 / 8.0],
-            "D3Q15" => &[2.0 / 9.0, 1.0 / 9.0, 1.0 / 9.0, 1.0 / 9.0, 1.0 / 9.0, 1.0 / 72.0, 1.0 / 72.0, 1.0 / 72.0, 1.0 / 72.0, 1.0 / 72.0, 1.0 / 72.0, 1.0 / 72.0, 1.0 / 72.0, 1.0 / 72.0, 1.0 / 72.0],
-            "D3Q19" => &[1.0 / 3.0, 1.0 / 18.0, 1.0 / 18.0, 1.0 / 18.0, 1.0 / 18.0, 1.0 / 18.0, 1.0 / 18.0, 1.0 / 36.0, 1.0 / 36.0, 1.0 / 36.0, 1.0 / 36.0, 1.0 / 36.0, 1.0 / 36.0, 1.0 / 36.0, 1.0 / 36.0, 1.0 / 36.0, 1.0 / 36.0, 1.0 / 36.0, 1.0 / 36.0],
-            "D3Q27" => &[8.0 / 27.0, 2.0 / 27.0, 2.0 / 27.0, 2.0 / 27.0, 2.0 / 27.0, 2.0 / 27.0, 2.0 / 27.0, 1.0 / 54.0, 1.0 / 54.0, 1.0 / 54.0, 1.0 / 54.0, 1.0 / 54.0, 1.0 / 54.0, 1.0 / 54.0, 1.0 / 54.0, 1.0 / 54.0, 1.0 / 54.0, 1.0 / 54.0, 1.0 / 54.0, 1.0 / 216.0, 1.0 / 216.0, 1.0 / 216.0, 1.0 / 216.0, 1.0 / 216.0, 1.0 / 216.0, 1.0 / 216.0, 1.0 / 216.0],
-            _ => panic!("Unsupported model: {}", self.model),
-        };
-
-        let cu = c[i].iter().zip(&[u.x, u.y, u.z]).map(|(ci, ui)| *ci as f32 * ui).sum::<f32>();
-        let u2 = u.x * u.x + u.y * u.y + u.z * u.z;
-        w[i] * *rho * (1.0 + 3.0 * cu + 4.5 * cu * cu - 1.5 * u2)
     }
 
     pub fn run(&mut self, time_steps: usize) {
@@ -436,20 +390,16 @@ impl LBM {
             return;
         }
 
-        // Initialize f in equilibrium from rho and u
-        for n in 0..self.N {
-            let (x, y, z) = xyz_from_n(&n, &self.Nx, &self.Ny, &self.Nz);
-            let rho = self.density[n];
-            let u = self.u[n];
-            for i in 0..self.Q {
-                self.f[n * self.Q + i] = self.equilibrium(&rho, &u, i);
-            }
-        }
-
         // Initialize OpenCL
         self.initialize_ocl();
         terminal_utils::print_name();
-        
+
+        // Initialize f in equilibrium from rho and u
+        unsafe {
+            self.equilibrium_kernel.as_ref().unwrap().enq().expect("Failed to enqueue 'collision_kernel'.");
+            self.queue.as_ref().unwrap().finish().expect("Queue finish failed.");
+        }
+
         // Create a progress bar
         let pb = ProgressBar::new(self.time_steps as u64);
 
@@ -460,6 +410,12 @@ impl LBM {
             .unwrap()
             .progress_chars("=> "),
         );
+
+        // Create output folder -> FUTURE FEATURE: add folder and file customization
+        let output_path = Path::new("output");
+        if !output_path.exists() {
+            std::fs::create_dir(output_path).expect("Failed to create output directory.");
+        }
 
         // Start timing
         let start_time = Instant::now();
@@ -483,23 +439,23 @@ impl LBM {
                 self.queue.as_ref().unwrap().finish().expect("Queue finish failed.");
             }
             
-            // Swap buffers
-            //std::mem::swap(&mut self.f_buffer, &mut self.f_new_buffer);
-            
-            // Debug output data
-            // if t % 100 == 0 {
-            //     // Read data from GPU to CPU
-            //     if let Err(err) = self.read_from_gpu() {
-            //         terminal_utils::print_error(&format!("Error reading data from GPU: {}", err));
-            //         return;
-            //     }
-
-            //     // Export data to output.csv
-            //     if let Err(err) = self.output_to(&format!("output/output{}.csv", &t)) {
-            //         terminal_utils::print_error(&format!("Error exporting data: {}", err));
-            //         return;
-            //     }
-            // }
+            // Output data
+            if self.output_interval != 0 {
+                if t % self.output_interval == 0 {
+                    // Read data from GPU to CPU
+                    if let Err(err) = self.read_from_gpu() {
+                        terminal_utils::print_error(&format!("Error reading data from GPU: {}", err));
+                        return;
+                    }
+                    // Export data to output file
+                    let magnitude = self.time_steps.to_string().len();
+                    let filename = format!("output/data_{:0width$}.csv", t, width = magnitude);
+                    if let Err(err) = self.output_to(&format!("{}", filename)) {
+                        terminal_utils::print_error(&format!("Error exporting data: {}", err));
+                        return;
+                    }
+                }
+            }
             
             pb.inc(1); // Increment the progress bar by 1
         }
@@ -520,34 +476,6 @@ impl LBM {
     }
 
     fn calculate_vorticity(&self, x: usize, y: usize, z: usize) -> f32 {
-        let dx = 1.0; /// self.Nx as f32;
-        let dy = 1.0; /// self.Ny as f32;
-        let dz = 1.0; /// self.Nz as f32;
-
-        let get_velocity = |x, y, z| {
-            if x >= self.Nx || y >= self.Ny || z >= self.Nz {
-                Velocity::zero()
-            } else {
-                let index = n_from_xyz(&x, &y, &z, &self.Nx, &self.Ny, &self.Nz);
-                self.u[index]
-            }
-        };
-
-        let du_dy = (get_velocity(x, y + 1, z).x - get_velocity(x, y.saturating_sub(1), z).x) / (2.0 * dy);
-        let du_dz = (get_velocity(x, y, z + 1).x - get_velocity(x, y, z.saturating_sub(1)).x) / (2.0 * dz);
-        let dv_dx = (get_velocity(x + 1, y, z).y - get_velocity(x.saturating_sub(1), y, z).y) / (2.0 * dx);
-        let dv_dz = (get_velocity(x, y, z + 1).y - get_velocity(x, y, z.saturating_sub(1)).y) / (2.0 * dz);
-        let dw_dx = (get_velocity(x + 1, y, z).z - get_velocity(x.saturating_sub(1), y, z).z) / (2.0 * dx);
-        let dw_dy = (get_velocity(x, y + 1, z).z - get_velocity(x, y.saturating_sub(1), z).z) / (2.0 * dy);
-
-        let vorticity_x = dw_dy - dv_dz;
-        let vorticity_y = du_dz - dw_dx;
-        let vorticity_z = dv_dx - du_dy;
-
-        (vorticity_x * vorticity_x + vorticity_y * vorticity_y + vorticity_z * vorticity_z).sqrt()
-    }
-
-    fn calculate_q_criteria(&self, x: usize, y: usize, z: usize) -> f32 {
         let dx = 1.0; // Grid spacing in x-direction
         let dy = 1.0; // Grid spacing in y-direction
         let dz = 1.0; // Grid spacing in z-direction
@@ -557,21 +485,57 @@ impl LBM {
                 Velocity::zero()
             } else {
                 let index = n_from_xyz(&x, &y, &z, &self.Nx, &self.Ny, &self.Nz);
-                self.u[index]
+                Velocity {
+                    x: self.u[index * 3],
+                    y: self.u[index * 3 + 1],
+                    z: self.u[index * 3 + 2],
+                }
             }
         };
 
-        let du_dx = (get_velocity(x + 1, y, z).x - get_velocity(x.saturating_sub(1), y, z).x) / (2.0 * dx);
         let du_dy = (get_velocity(x, y + 1, z).x - get_velocity(x, y.saturating_sub(1), z).x) / (2.0 * dy);
         let du_dz = (get_velocity(x, y, z + 1).x - get_velocity(x, y, z.saturating_sub(1)).x) / (2.0 * dz);
 
         let dv_dx = (get_velocity(x + 1, y, z).y - get_velocity(x.saturating_sub(1), y, z).y) / (2.0 * dx);
-        let dv_dy = (get_velocity(x, y + 1, z).y - get_velocity(x, y.saturating_sub(1), z).y) / (2.0 * dy);
         let dv_dz = (get_velocity(x, y, z + 1).y - get_velocity(x, y, z.saturating_sub(1)).y) / (2.0 * dz);
 
         let dw_dx = (get_velocity(x + 1, y, z).z - get_velocity(x.saturating_sub(1), y, z).z) / (2.0 * dx);
         let dw_dy = (get_velocity(x, y + 1, z).z - get_velocity(x, y.saturating_sub(1), z).z) / (2.0 * dy);
-        let dw_dz = (get_velocity(x, y, z + 1).z - get_velocity(x, y, z.saturating_sub(1)).z) / (2.0 * dz);
+
+        // Vorticity components
+        let vorticity_x = dw_dy - dv_dz;
+        let vorticity_y = du_dz - dw_dx;
+        let vorticity_z = dv_dx - du_dy;
+
+        // Magnitude of vorticity
+        (vorticity_x.powi(2) + vorticity_y.powi(2) + vorticity_z.powi(2)).sqrt()
+    }
+
+    fn calculate_q_criteria(&self, x: usize, y: usize, z: usize) -> f32 {
+        let dx = 1.0; // Grid spacing in x-direction
+        let dy = 1.0; // Grid spacing in y-direction
+        let dz = 1.0; // Grid spacing in z-direction
+
+        let get_velocity = |x, y, z| {
+            if x >= self.Nx || y >= self.Ny || z >= self.Nz {
+                0.0 // Return a default f32 value
+            } else {
+                let index = n_from_xyz(&x, &y, &z, &self.Nx, &self.Ny, &self.Nz);
+                self.u[index]
+            }
+        };
+
+        let du_dx = (get_velocity(x + 1, y, z) - get_velocity(x.saturating_sub(1), y, z)) / (2.0 * dx);
+        let du_dy = (get_velocity(x, y + 1, z) - get_velocity(x, y.saturating_sub(1), z)) / (2.0 * dy);
+        let du_dz = (get_velocity(x, y, z + 1) - get_velocity(x, y, z.saturating_sub(1))) / (2.0 * dz);
+
+        let dv_dx = (get_velocity(x + 1, y, z) - get_velocity(x.saturating_sub(1), y, z)) / (2.0 * dx);
+        let dv_dy = (get_velocity(x, y + 1, z) - get_velocity(x, y.saturating_sub(1), z)) / (2.0 * dy);
+        let dv_dz = (get_velocity(x, y, z + 1) - get_velocity(x, y, z.saturating_sub(1))) / (2.0 * dz);
+
+        let dw_dx = (get_velocity(x + 1, y, z) - get_velocity(x.saturating_sub(1), y, z)) / (2.0 * dx);
+        let dw_dy = (get_velocity(x, y + 1, z) - get_velocity(x, y.saturating_sub(1), z)) / (2.0 * dy);
+        let dw_dz = (get_velocity(x, y, z + 1) - get_velocity(x, y, z.saturating_sub(1))) / (2.0 * dz);
 
         // Symmetric part of the velocity gradient tensor (strain rate tensor)
         let s_xx = du_dx;
@@ -605,26 +569,24 @@ impl LBM {
         writeln!(writer, "x, y, z, rho,      ux,       uy,       uz,       v,       q")?;
         
         // Iterate over the grid and write the data
-        for x in 0..self.Nx {
-            for y in 0..self.Ny {
-            for z in 0..self.Nz {
-                // Calculate the linear index
-                let index = n_from_xyz(&x, &y, &z, &self.Nx, &self.Ny, &self.Nz);
-                // Get density and velocity
-                let rho = &self.density[index];
-                let u = &self.u[index];
-                
-                // Calculate vorticity
-                let vorticity = self.calculate_vorticity(x, y, z);
-                let q_criteria = self.calculate_q_criteria(x, y, z);
-                // Write the data to the file
-                writeln!(
-                writer,
-                "{}, {}, {}, {:.6}, {:.6}, {:.6}, {:.6}, {:.6}, {:.6}", // Format floating-point numbers to 6 decimal places
-                x, y, z, rho, u.x, u.y, u.z, vorticity, q_criteria
-                )?;
-            }
-            }
+        for n in 0..self.N {
+            // Get the x, y, z coordinates from the linear index n
+            let (x, y, z) = xyz_from_n(&n, &self.Nx, &self.Ny, &self.Nz);
+            // Get density and velocity
+            let rho = &self.density[n];
+            let ux = self.u[n * 3];
+            let uy = self.u[n * 3 + 1];
+            let uz = self.u[n * 3 + 2];
+            
+            // Calculate vorticity
+            let vorticity = self.calculate_vorticity(x, y, z);
+            let q_criteria = self.calculate_q_criteria(x, y, z);
+            // Write the data to the file
+            writeln!(
+            writer,
+            "{}, {}, {}, {:.6}, {:.6}, {:.6}, {:.6}, {:.6}, {:.6}", // Format floating-point numbers to 6 decimal places
+            x, y, z, rho, ux, uy, uz, vorticity, q_criteria
+            )?;
         }
     
         // Flush the buffer to ensure all data is written to the file
@@ -632,6 +594,10 @@ impl LBM {
     
         //println!("Simulation results have been written to {}", path);
         Ok(())
+    }
+
+    pub fn set_output_interval(&mut self, interval: usize) {
+        self.output_interval = interval;
     }
 
     pub fn get_density(&self) -> Vec<f32> {
@@ -644,7 +610,7 @@ impl LBM {
     }
 
     pub fn get_velocity(&self) -> Vec<Velocity> {
-        if let Some(buffer) = &self.velocity_buffer {
+        if let Some(buffer) = &self.u_buffer {
             let mut velocity_data = vec![0.0; self.N * 3];
             buffer.read(&mut velocity_data).enq().expect("Failed to read 'velocity' buffer.");
             return velocity_data
@@ -658,7 +624,23 @@ impl LBM {
         }
         vec![] // Return an empty vector if the buffer is not available
     }
-    
+
+    fn velocity_to_u(&self) -> Vec<f32> {
+        self.velocity.iter()
+            .flat_map(|v| vec![v.x, v.y, v.z])
+            .collect()
+    }
+
+    fn u_to_velocity(&mut self, flat_velocity_data: Vec<f32>) {
+        self.velocity = flat_velocity_data
+            .chunks(3)
+            .map(|chunk| Velocity {
+                x: chunk[0],
+                y: chunk[1],
+                z: chunk[2],
+            })
+            .collect();
+    }    
 }
 
 

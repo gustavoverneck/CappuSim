@@ -13,7 +13,6 @@ use std::path::Path;
 
 
 // Taylor-Green Vortex
-/*
 fn main() {
     let nx = 512;
     
@@ -22,55 +21,53 @@ fn main() {
     // Set initial conditions
     lbm.set_conditions(|lbm, x, y, z, n| {
         let pi = std::f32::consts::PI;
-        lbm.u[n].x = -f32::cos(2.0 * pi * x as f32 / nx as f32) * f32::sin(2.0 * pi * y as f32 / nx as f32);
-        lbm.u[n].y = f32::sin(2.0 * pi * x as f32 / nx as f32) * f32::cos(2.0 * pi * y as f32 / nx as f32);
-        lbm.u[n].z = 0.0f32;
+        lbm.velocity[n].x = -f32::cos(2.0 * pi * x as f32 / nx as f32) * f32::sin(2.0 * pi * y as f32 / nx as f32);
+        lbm.velocity[n].y = f32::sin(2.0 * pi * x as f32 / nx as f32) * f32::cos(2.0 * pi * y as f32 / nx as f32);
+        lbm.velocity[n].z = 0.0f32;
         lbm.density[n] = 1.0f32 - 0.25 * (f32::cos(4.0 * pi * x as f32 / nx as f32) + f32::cos(4.0 * pi * y as f32 / nx as f32));
     });
-    
-    lbm.run(10000);
-    
-    lbm.output_to("output.csv").expect("Failed to write output file.");
+    lbm.set_output_interval(50);
+    lbm.run(1000);
+    //lbm.output_to("output.csv").expect("Failed to write output file.");
 }
-*/
 
 // Von-Kármán Vortex
-fn main() {
-    let nx = 128;
+// fn main() {
+//     let nx = 128;
 
-    // Initialize LBM simulation
-    let mut lbm = LBM::new(nx, nx, 1, "D2Q9".to_string(), 0.1);
-    // Set initial conditions
-    lbm.set_conditions(|lbm, x, y, z, n| {
-        let cx = nx as f32 / 6.0; // Circle center x
-        let cy = nx as f32 / 2.0; // Circle center y
-        let radius = nx as f32 / 10.0; // Circle radius
+//     // Initialize LBM simulation
+//     let mut lbm = LBM::new(nx, nx, 1, "D2Q9".to_string(), 0.1);
+//     // Set initial conditions
+//     lbm.set_conditions(|lbm, x, y, z, n| {
+//         let cx = nx as f32 / 6.0; // Circle center x
+//         let cy = nx as f32 / 2.0; // Circle center y
+//         let radius = nx as f32 / 10.0; // Circle radius
 
-        lbm.u[n].x = 0.0;
-        lbm.u[n].y = 0.0;
-        lbm.u[n].z = 0.0;
+//         lbm.velocity[n].x = 0.0;
+//         lbm.velocity[n].y = 0.0;
+//         lbm.velocity[n].z = 0.0;
 
-        // Set density field
-        lbm.density[n] = 1.0f32;
+//         // Set density field
+//         lbm.density[n] = 0.0f32;
 
-        // Set FLAG_SOLID for a circular obstacle
-        let dx = x as f32 - cx;
-        let dy = y as f32 - cy;
-        if dx * dx + dy * dy <= radius * radius {
-            lbm.flags[n] = FLAG_SOLID;
-            lbm.density[n] = 0.0f32;
-        }
+//         // Set FLAG_SOLID for a circular obstacle
+//         let dx = x as f32 - cx;
+//         let dy = y as f32 - cy;
+//         if dx * dx + dy * dy <= radius * radius {
+//             lbm.flags[n] = FLAG_SOLID;
+//             lbm.density[n] = 0.0f32;
+//         }
 
-        // Set FLAG_EQ for x == 0
-        if x == 0 {
-            lbm.flags[n] = FLAG_EQ;
-            lbm.u[n].x = 0.1; // Uniform horizontal velocity
-            lbm.u[n].y = 0.0;
-            lbm.density[n] = 1.0;
-        }
-    });
+//         // Set FLAG_EQ for x == 0
+//         if x == 0 {
+//             lbm.flags[n] = FLAG_EQ;
+//             lbm.velocity[n].x = 0.1; // Uniform horizontal velocity
+//             lbm.velocity[n].y = 0.0;
+//             lbm.density[n] = 1.0;
+//         }
+//     });
 
-    lbm.run(10000);
+//     lbm.run(1000);
 
-    lbm.output_to("output.csv").expect("Failed to write output file.");
-}
+//     lbm.output_to("output.csv").expect("Failed to write output file.");
+// }
