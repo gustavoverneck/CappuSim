@@ -59,6 +59,7 @@ do for [file in filelist] {
     plot file using 1:2:9 with image title ""
     
     unset multiplot
+    clear
 }
 
 print "Processamento concluído! Gráficos salvos em: results/"
