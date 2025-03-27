@@ -97,6 +97,8 @@ pub struct LBM {
     equilibrium_kernel: Option<Kernel>,
     found_errors: bool,
     output_interval: usize,
+    output_csv: bool,
+    output_vtk: bool,
 }
 
 impl LBM {
@@ -152,6 +154,8 @@ impl LBM {
             equilibrium_kernel: None,
             found_errors: false,
             output_interval: 0,
+            output_csv: false,
+            output_vtk: false,
         }
     }
 
@@ -491,12 +495,22 @@ impl LBM {
                         terminal_utils::print_error(&format!("Error reading data from GPU: {}", err));
                         return;
                     }
-                    // Export data to output file
                     let magnitude = self.time_steps.to_string().len();
-                    let filename = format!("output/data_{:0width$}.csv", t, width = magnitude);
-                    if let Err(err) = self.output_to(&format!("{}", filename)) {
-                        terminal_utils::print_error(&format!("Error exporting data: {}", err));
-                        return;
+                    if (self.output_csv) {
+                        // Export data to output csv file
+                        let filename = format!("output/data_{:0width$}.csv", t, width = magnitude);
+                        if let Err(err) = self.output_to(&format!("{}", filename)) {
+                            terminal_utils::print_error(&format!("Error exporting data: {}", err));
+                            return;
+                        }
+                    }
+                    if (self.output_vtk) {
+                        // Export data to VTK file
+                        let filename = format!("output/data_{:0width$}.vtk", t, width = magnitude);
+                        if let Err(err) = self.export_to_vtk(&filename) {
+                            terminal_utils::print_error(&format!("Error exporting VTK data: {}", err));
+                            return;
+                        }
                     }
                 }
             }
@@ -517,6 +531,14 @@ impl LBM {
             elapsed_seconds,
             mlups,
         );
+    }
+
+    pub fn set_output_csv(&mut self, state: bool) {
+        self.output_csv = state;
+    }
+
+    pub fn set_output_vtk(&mut self, state: bool) {
+        self.output_vtk = state;
     }
 
     pub fn calculate_vorticity(&self, x: usize, y: usize, z: usize) -> f32 {
