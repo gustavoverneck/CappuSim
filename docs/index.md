@@ -8,8 +8,9 @@ It supports 2D and 3D simulations with multiple lattice models, dynamic boundary
 
 ## 📖 Documentation
 
-- [▶️ Usage Guide](usage.md)
-- [🧠 LBM Theory](theory.md)
+- [▶️ Usage Guide](usage_guide.md)
+- [🧠 LBM Theory](lbm_theory.md)
+- [📚 LatteLab Documentation](lattelab_doc.md)
 
 ---
 
