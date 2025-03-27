@@ -16,9 +16,9 @@ use crate::utils::terminal_utils;
 use crate::core::kernels::LBM_KERNEL;
 
 // LBM FLAGS
-pub const FLAG_FLUID: u8 = 0;
-pub const FLAG_SOLID: u8 = 1;
-pub const FLAG_EQ: u8 = 2;
+pub const FLAG_FLUID: i32 = 0;
+pub const FLAG_SOLID: i32 = 1;
+pub const FLAG_EQ: i32 = 2;
 
 pub struct LBM {
     pub Nx: usize,
@@ -36,12 +36,12 @@ pub struct LBM {
     pub density: Vec<f32>,
     u: Vec<f32>,
     pub velocity: Vec<Velocity>,
-    pub flags: Vec<u8>,
+    pub flags: Vec<i32>,
     f_buffer: Option<Buffer<f32>>,
     f_new_buffer: Option<Buffer<f32>>,
     density_buffer: Option<Buffer<f32>>,
     u_buffer: Option<Buffer<f32>>,
-    flags_buffer: Option<Buffer<u8>>,
+    flags_buffer: Option<Buffer<i32>>,
     platform: Option<Platform>,
     device: Option<Device>,
     context: Option<Context>,
@@ -49,7 +49,7 @@ pub struct LBM {
     program: Option<Program>,
     streaming_kernel: Option<Kernel>,
     collision_kernel: Option<Kernel>,
-    copy_kernel: Option<Kernel>,
+    swap_kernel: Option<Kernel>,
     equilibrium_kernel: Option<Kernel>,
     found_errors: bool,
     output_interval: usize,
@@ -104,7 +104,7 @@ impl LBM {
             program: None,
             streaming_kernel: None,
             collision_kernel: None,
-            copy_kernel: None,
+            swap_kernel: None,
             equilibrium_kernel: None,
             found_errors: false,
             output_interval: 0,
@@ -144,11 +144,11 @@ impl LBM {
         #define N {}
         #define Q {}
         #define {}
-        #define FLAG_FLUID {}
-        #define FLAG_SOLID {}
-        #define FLAG_EQ {}
+        #define FLAG_FLUID 0
+        #define FLAG_SOLID 1
+        #define FLAG_EQ 2
         {}
-        "#, self.Nx, self.Ny, self.Nz, self.N, self.Q, self.model.as_str(), FLAG_FLUID, FLAG_SOLID, FLAG_EQ, LBM_KERNEL);
+        "#, self.Nx, self.Ny, self.Nz, self.N, self.Q, self.model.as_str(), LBM_KERNEL);
         //println!("{}", kernel_source); //Debug: print final kernel
 
         // Define OpenCL program
@@ -195,7 +195,7 @@ impl LBM {
         .expect("Failed to build 'velocity' buffer."));
 
         // Create kernels and set its arguments
-        self.flags_buffer = Some(Buffer::<u8>::builder()
+        self.flags_buffer = Some(Buffer::<i32>::builder()
         .queue(self.queue.as_ref().unwrap().clone())
         .flags(MEM_READ_WRITE)
         .len(self.N) // Corrected size for 'flags'
@@ -222,23 +222,23 @@ impl LBM {
             .queue(self.queue.as_ref().unwrap().clone())
             .global_work_size(self.N)
             .arg(self.f_buffer.as_ref().unwrap())
-            .arg(self.flags_buffer.as_ref().unwrap())
             .arg(self.density_buffer.as_ref().unwrap())
+            .arg(self.flags_buffer.as_ref().unwrap())
             .arg(self.u_buffer.as_ref().unwrap())
             .arg(&self.omega)
             .build()
             .expect("Failed to build OpenCL 'collision_kernel'."));
         
         // Create swap kernel and set its arguments
-        self.copy_kernel = Some(Kernel::builder()
+        self.swap_kernel = Some(Kernel::builder()
             .program(self.program.as_ref().unwrap())
-            .name("copy")
+            .name("swap")
             .queue(self.queue.as_ref().unwrap().clone())
             .global_work_size(self.N * self.Q)
             .arg(self.f_buffer.as_ref().unwrap())
             .arg(self.f_new_buffer.as_ref().unwrap())
             .build()
-            .expect("Failed to build OpenCL 'copy_kernel'."));
+            .expect("Failed to build OpenCL 'swap_kernel'."));
 
         // Create equilibrium kernel for initial conditions
         self.equilibrium_kernel = Some(Kernel::builder()
@@ -248,7 +248,6 @@ impl LBM {
             .global_work_size(self.N)
             .arg(self.f_buffer.as_ref().unwrap())
             .arg(self.density_buffer.as_ref().unwrap())
-            .arg(self.flags_buffer.as_ref().unwrap())
             .arg(self.u_buffer.as_ref().unwrap())
             .build()
             .expect("Failed to build OpenCL 'equilibrium_kernel'."));
@@ -284,7 +283,7 @@ impl LBM {
 
         // Add size of flags buffer
         if let Some(buffer) = &self.flags_buffer {
-            total_vram += buffer.len() * size_of::<u8>();
+            total_vram += buffer.len() * size_of::<i32>();
         }
 
         total_vram
@@ -435,7 +434,7 @@ impl LBM {
             }
             // Swap f and f_new after streaming
             unsafe {
-                self.copy_kernel.as_ref().unwrap().enq().expect("Failed to enqueue 'copy_kernel'.");
+                self.swap_kernel.as_ref().unwrap().enq().expect("Failed to enqueue 'swap_kernel'.");
                 self.queue.as_ref().unwrap().finish().expect("Queue finish failed.");
             }
             
@@ -643,9 +642,8 @@ impl LBM {
     }    
 }
 
-
 pub fn n_from_xyz(x: &usize, y: &usize, z: &usize, Nx: &usize, Ny: &usize, Nz: &usize) -> usize {
-    x + Nx * (y + Ny * z)
+    z * (Nx * Ny) + y * Nx + x
 }
 pub fn xyz_from_n(n: &usize, Nx: &usize, Ny: &usize, Nz: &usize) -> (usize, usize, usize) {
     let x = *n % Nx;

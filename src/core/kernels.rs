@@ -122,42 +122,46 @@ constant float w[Q] = {
 __kernel void streaming_kernel(
     __global float* f,        // Input distribution function
     __global float* f_new,    // Output distribution function after streaming
-    __global int* flags       // Flags array to indicate boundary conditions
+    __global int* flags       // Flags: FLUID, SOLID, EQ
 ) {
     // Get the global ID of the current thread
-    int n = get_global_id(0);
-    if (n >= N) return; // Exit if the thread is out of bounds
+    int n = get_global_id(0); 
+    if (n >= NX * NY * NZ) return; // Prevent out-of-bounds access
 
-    // Compute the 3D coordinates (x, y, z) of the current node index n
+    // Skip processing for solid cells
+    if (flags[n] == FLAG_SOLID) return;
+
+    // Compute the 3D coordinates of the current cell
     int x = n % NX;
     int y = (n / NX) % NY;
     int z = n / (NX * NY);
 
     // Loop over all velocity directions
+    #pragma unroll
     for (int q = 0; q < Q; q++) {
         // Get the velocity vector components for the current direction
         int dx = c[q][0];
         int dy = c[q][1];
         int dz = c[q][2];
 
-        // Compute the coordinates of the neighboring node
-        int xn = x + dx;
-        int yn = y + dy;
-        int zn = z + dz;
+        // Compute the coordinates of the neighboring cell, applying periodic boundary conditions
+        int xn = (x + dx + NX) % NX;
+        int yn = (y + dy + NY) % NY;
+        int zn = (z + dz + NZ) % NZ;
 
-         // Compute linear index of the neighbor
-        bool is_boundary = (xn < 0) | (xn >= NX) | 
-                           (yn < 0) | (yn >= NY) | 
-                           (zn < 0) | (zn >= NZ);
-        int neighbor = zn * (NX * NY) + yn * NX + xn;
+        // Compute the linear index of the neighboring cell
+        int nn = zn * (NX * NY) + yn * NX + xn;
 
-        // Ensure the neighbor index is within valid bounds before accessing memory
-        if (is_boundary || flags[neighbor] == FLAG_SOLID) {
-            // Bounce-back condition
+        // Retrieve the flag of the neighboring cell
+        int neighbor_flag = flags[nn];
+
+        if (neighbor_flag == FLAG_SOLID) {
+            // Bounce-back condition: reflect to the opposite direction within the current cell
             f_new[n * Q + opposite[q]] = f[n * Q + q];
-        } else {
-            // Stream distribution function to the neighbor
-            f_new[neighbor * Q + q] = f[n * Q + q];
+        }
+        else if (neighbor_flag == FLAG_FLUID || neighbor_flag == FLAG_EQ) {
+            // Propagate to the neighboring cell (includes safe periodicity)
+            f_new[nn * Q + q] = f[n * Q + q];
         }
     }
 }
@@ -165,85 +169,76 @@ __kernel void streaming_kernel(
 // ----------------------------------------------------------------------------------------------------------------------
 
 __kernel void collision_kernel(
-    __global float* f,        // Input distribution function
-    __global float* rho,      // Density array
-    __global int* flags,      // Flags array to indicate boundary conditions
-    __global float* u,        // Velocity array
+    __global float* f,        // Input distribution function array
+    __global float* rho,      // Output density array
+    __global int* flags,      // Flags array indicating boundary conditions
+    __global float* u,        // Output velocity array
     float omega               // Relaxation parameter
 ) {
     // Get the global ID of the current thread
     int n = get_global_id(0);
-    if (n >= N) return; // Exit if the thread is out of bounds
+    if (n >= N) return; // Prevent out-of-bounds access
 
-    // Initialize local variables for density and velocity components
+    // Retrieve the flag for the current cell
+    int flag = flags[n];
+
+    // Skip collision for solid cells
+    if (flag == FLAG_SOLID) return;
+
+    // Compute local density and velocity
     float local_rho = 0.0f;
     float ux = 0.0f, uy = 0.0f, uz = 0.0f;
 
-    // Compute local density and velocity components
+    // Loop over all velocity directions to calculate density and velocity
+    #pragma unroll
     for (int q = 0; q < Q; q++) {
-        float f_q = f[n * Q + q]; // Distribution function for direction q
-        local_rho += f_q;         // Accumulate density
-        ux += c[q][0] * f_q;      // Accumulate x-velocity
-        uy += c[q][1] * f_q;      // Accumulate y-velocity
-        uz += c[q][2] * f_q;      // Accumulate z-velocity
+        float fq = f[n * Q + q];
+        local_rho += fq;                  // Accumulate density
+        ux += c[q][0] * fq;               // Accumulate x-velocity
+        uy += c[q][1] * fq;               // Accumulate y-velocity
+        uz += c[q][2] * fq;               // Accumulate z-velocity
     }
 
-    // Normalize velocity components if density is non-zero
-    if (local_rho > 1e-10f) {
-        ux /= local_rho;
-        uy /= local_rho;
-        uz /= local_rho;
-    } else {
-        // Set velocity to zero if density is too small
-        ux = 0.0f;
-        uy = 0.0f;
-        uz = 0.0f;
-    }
+    // Normalize velocity by density, avoiding division by zero
+    float inv_rho = (local_rho > 1e-10f) ? 1.0f / local_rho : 0.0f;
+    ux *= inv_rho;
+    uy *= inv_rho;
+    uz *= inv_rho;
 
-    // Store computed density and velocity in the output arrays
+    // Store macroscopic variables (density and velocity)
     rho[n] = local_rho;
-    u[n * 3] = ux;
+    u[n * 3 + 0] = ux;
     u[n * 3 + 1] = uy;
     u[n * 3 + 2] = uz;
 
-    // Retrieve the flag for the current node
-    int flag = flags[n];
+    float u2 = ux * ux + uy * uy + uz * uz;                // Squared velocity magnitude
 
-    // Handle boundary conditions based on the flag
-    if (flag != FLAG_FLUID) {
-        if (flag == FLAG_SOLID) {
-            // Bounce-back condition for solid nodes
-            for (int q = 0; q < Q; q++) {
-                f[n * Q + q] = f[n * Q + opposite[q]];
-            }
-        } else if (flag == FLAG_EQ) {
-            // Equilibrium condition for specific nodes
-            for (int q = 0; q < Q; q++) {
-                float cu = c[q][0] * ux + c[q][1] * uy + c[q][2] * uz; // Dot product of velocity and direction
-                float u2 = ux * ux + uy * uy + uz * uz;                // Squared velocity magnitude
-                f[n * Q + q] = local_rho * w[q] * (1.0f + 3.0f * cu + 4.5f * cu * cu - 1.5f * u2);
-            }
+    if (flag == FLAG_EQ) {
+        #pragma unroll    
+        for (int q = 0; q < Q; q++) {
+            float cu = c[q][0] * ux + c[q][1] * uy + c[q][2] * uz; // Dot product of velocity and direction vector
+            f[n * Q + q] = local_rho * w[q] * (1.0f + 3.0f * cu + 4.5f * cu * cu - 1.5f * u2); // Equilibrium distribution
+        }  
+    } else {
+        // Perform standard BGK collision for fluid cells
+        #pragma unroll
+        for (int q = 0; q < Q; q++) {
+            float cu = c[q][0] * ux + c[q][1] * uy + c[q][2] * uz; // Dot product of velocity and direction vector
+            float feq = local_rho * w[q] * (1.0f + 3.0f * cu + 4.5f * cu * cu - 1.5f * u2); // Equilibrium distribution
+            f[n * Q + q] = (1.0f - omega) * f[n * Q + q] + omega * feq; // Relaxation towards equilibrium
         }
-        return; // Exit after handling boundary conditions
-    }
-
-    // Perform collision step for fluid nodes
-    for (int q = 0; q < Q; q++) {
-        float cu = c[q][0] * ux + c[q][1] * uy + c[q][2] * uz; // Dot product of velocity and direction
-        float u2 = ux * ux + uy * uy + uz * uz;                // Squared velocity magnitude
-        float feq = local_rho * w[q] * (1.0f + 3.0f * cu + 4.5f * cu * cu - 1.5f * u2); // Equilibrium distribution
-        f[n * Q + q] = f[n * Q + q] * (1.0f - omega) + feq * omega; // Relaxation towards equilibrium
     }
 }
 
+
 // ----------------------------------------------------------------------------------------------------------------------
 
-// Kernel to copy data from the new distribution function array to the original array
-__kernel void copy(__global float* f, __global float* f_new) {
+// Kernel to swap data from the new distribution function array to the original array
+__kernel void swap(__global float* f, __global float* f_new) {
     // Get the global ID of the current thread
     int n = get_global_id(0);
 
-    // Check if the thread is within the grid boundaries
+    // Prevent out-of-bounds access
     if (n >= N * Q) return;
 
     // Copy the value from the new distribution function array to the original array
@@ -259,23 +254,24 @@ __kernel void equilibrium(
 ) {
     // Get the global ID of the current thread
     int n = get_global_id(0);
-    if (n >= N) return; // Exit if the thread is out of bounds
+    if (n >= N) return; // Prevent out-of-bounds access
 
     // Retrieve velocity components for the current node
     float ux = u[n * 3];
     float uy = u[n * 3 + 1];
     float uz = u[n * 3 + 2];
     
+    // Compute the squared velocity magnitude
+    float u2 = ux * ux + uy * uy + uz * uz;
+
     // Retrieve the local density for the current node
     float local_rho = rho[n];
 
     // Loop over all velocity directions
+    #pragma unroll
     for (int q = 0; q < Q; q++) {
         // Compute the dot product of velocity and direction vector
         float cu = c[q][0] * ux + c[q][1] * uy + c[q][2] * uz;
-
-        // Compute the squared velocity magnitude
-        float u2 = ux * ux + uy * uy + uz * uz;
 
         // Compute the equilibrium distribution function for the current direction
         f[n * Q + q] = local_rho * w[q] * (1.0f + 3.0f * cu + 4.5f * cu * cu - 1.5f * u2);
