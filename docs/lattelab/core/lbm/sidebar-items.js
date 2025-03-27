@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"constant":["FLAG_EQ","FLAG_FLUID","FLAG_SOLID"],"fn":["n_from_xyz","xyz_from_n"],"struct":["LBM"]};

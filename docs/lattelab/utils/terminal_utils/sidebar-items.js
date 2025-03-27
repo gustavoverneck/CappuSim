@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["print_error","print_log","print_metrics","print_name","print_success","print_warning","print_welcome_message"]};
