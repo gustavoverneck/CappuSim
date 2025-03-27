@@ -1,7 +1,51 @@
+#![allow(non_snake_case)]   // Allow non-snake_case naming convention
+
+/// The `LBM` struct represents a Lattice Boltzmann Method (LBM) simulation.
+/// It encapsulates the grid dimensions, physical parameters, and OpenCL resources
+/// required for the simulation.
+///
+/// # Fields
+/// - `Nx`, `Ny`, `Nz`: Dimensions of the simulation grid in the x, y, and z directions.
+/// - `N`: Total number of grid points (Nx * Ny * Nz).
+/// - `model`: The LBM model used (e.g., "D2Q9", "D3Q19").
+/// - `D`: Number of spatial dimensions (2 or 3).
+/// - `Q`: Number of discrete velocity directions in the LBM model.
+/// - `viscosity`: Kinematic viscosity of the fluid.
+/// - `omega`: Relaxation parameter derived from viscosity.
+/// - `time_steps`: Number of time steps to simulate.
+/// - `f`, `f_new`: Distribution functions for the LBM simulation.
+/// - `density`: Fluid density at each grid point.
+/// - `u`: Flattened velocity vector (3 components per grid point).
+/// - `velocity`: Velocity vector as a `Velocity` struct for each grid point.
+/// - `flags`: Flags indicating the type of each grid point (fluid, solid, eq).
+/// - `f_buffer`, `f_new_buffer`, `density_buffer`, `u_buffer`, `flags_buffer`: OpenCL buffers for simulation data.
+/// - `platform`, `device`, `context`, `queue`, `program`: OpenCL resources for GPU computation.
+/// - `streaming_kernel`, `collision_kernel`, `swap_kernel`, `equilibrium_kernel`: OpenCL kernels for LBM operations.
+/// - `found_errors`: Indicates if errors were found in the input parameters.
+/// - `output_interval`: Interval for exporting simulation data to files.
+///
+/// # Methods
+/// - `new`: Creates a new `LBM` instance with the specified grid dimensions, model, and viscosity.
+/// - `initialize_ocl`: Initializes OpenCL resources and builds kernels for the simulation.
+/// - `calculate_vram_usage`: Calculates the total VRAM usage of the simulation.
+/// - `check_errors_in_input`: Validates the input parameters for the simulation.
+/// - `set_conditions`: Sets initial conditions for the simulation using a user-defined function.
+/// - `read_from_gpu`: Reads simulation data from GPU buffers to CPU memory.
+/// - `run`: Runs the LBM simulation for a specified number of time steps.
+/// - `calculate_vorticity`: Calculates the vorticity magnitude at a specific grid point.
+/// - `calculate_q_criteria`: Calculates the Q-criteria at a specific grid point.
+/// - `output_to`: Exports simulation data to a CSV file.
+/// - `set_output_interval`: Sets the interval for exporting simulation data.
+/// - `get_density`: Retrieves the density data from the GPU.
+/// - `get_velocity`: Retrieves the velocity data from the GPU.
+/// - `velocity_to_u`: Converts the `velocity` vector to a flattened `u` vector.
+/// - `u_to_velocity`: Converts a flattened `u` vector to the `velocity` vector.
+///
+/// # Utility Functions
+/// - `n_from_xyz`: Converts 3D grid coordinates (x, y, z) to a linear index.
+/// - `xyz_from_n`: Converts a linear index to 3D grid coordinates (x, y, z).
 // src/core/lbm.rs
 
-//#![allow(unused)]           // Allow unused imports and warnings
-#![allow(non_snake_case)]   // Allow non-snake_case naming convention
 use ocl::{Platform, Device, Context, Queue, Program, Buffer, Kernel, ProQue};
 use ocl::flags::MEM_READ_WRITE;
 use std::error::Error;
@@ -410,11 +454,12 @@ impl LBM {
             .progress_chars("=> "),
         );
 
-        // Create output folder -> FUTURE FEATURE: add folder and file customization
+        // Recreate output folder -> FUTURE FEATURE: add folder and file customization
         let output_path = Path::new("output");
-        if !output_path.exists() {
-            std::fs::create_dir(output_path).expect("Failed to create output directory.");
+        if output_path.exists() {
+            std::fs::remove_dir_all(output_path).expect("Failed to remove existing output directory.");
         }
+        std::fs::create_dir(output_path).expect("Failed to create output directory.");
 
         // Start timing
         let start_time = Instant::now();

@@ -3,6 +3,10 @@
 /// and copying data between distribution function arrays.
 ///
 /// # Constants
+/// - `NX`: X direction total lattice nodes.
+/// - `NY`: Y direction total lattice nodes.
+/// - `NZ`: Z direction total lattice nodes.
+/// - `N`: Total lattice nodes.
 /// - `c`: Velocity vectors for different lattice configurations (D2Q9, D3Q7, D3Q15, D3Q19, D3Q27).
 /// - `opposite`: Opposite direction indices for bounce-back boundary conditions.
 /// - `w`: Weight factors for equilibrium distribution computation.
@@ -30,7 +34,7 @@
 /// - `u`: Output velocity array.
 /// - `omega`: Relaxation parameter.
 ///
-/// ## `copy`
+/// ## `swap`
 /// Copies data from the new distribution function array to the original array.
 ///
 /// ### Parameters:
@@ -44,8 +48,18 @@
 /// ### Parameters:
 /// - `f`: Distribution function array.
 /// - `rho`: Density array.
-/// - `flags`: Flags array indicating boundary conditions.
 /// - `u`: Velocity array.
+///
+/// # Notes
+/// - The kernels are designed to work with different lattice configurations, such as D2Q9, D3Q7, D3Q15, D3Q19, and D3Q27.
+/// - Periodic boundary conditions are applied during the streaming step.
+/// - Bounce-back boundary conditions are implemented for solid nodes.
+/// - The collision kernel supports both standard BGK collision and equilibrium initialization for specific nodes.
+/// - The equilibrium kernel computes the equilibrium distribution function directly for given density and velocity values.
+///
+/// # Usage
+/// These kernels are written in OpenCL C and are intended to be used with an OpenCL runtime. 
+/// They are embedded as a string in the Rust code and can be compiled and executed on compatible devices.
 
 pub const LBM_KERNEL: &str = r#"
 // Velocity vectors (D2Q9, D3Q7, D3Q15, D3Q19, D3Q27)
@@ -124,43 +138,33 @@ __kernel void streaming_kernel(
     __global float* f_new,    // Output distribution function after streaming
     __global int* flags       // Flags: FLUID, SOLID, EQ
 ) {
-    // Get the global ID of the current thread
     int n = get_global_id(0); 
-    if (n >= NX * NY * NZ) return; // Prevent out-of-bounds access
+    if (n >= NX * NY * NZ) return;
 
-    // Skip processing for solid cells
     if (flags[n] == FLAG_SOLID) return;
 
-    // Compute the 3D coordinates of the current cell
     int x = n % NX;
     int y = (n / NX) % NY;
     int z = n / (NX * NY);
 
-    // Loop over all velocity directions
     #pragma unroll
     for (int q = 0; q < Q; q++) {
-        // Get the velocity vector components for the current direction
         int dx = c[q][0];
         int dy = c[q][1];
         int dz = c[q][2];
 
-        // Compute the coordinates of the neighboring cell, applying periodic boundary conditions
         int xn = (x + dx + NX) % NX;
         int yn = (y + dy + NY) % NY;
         int zn = (z + dz + NZ) % NZ;
 
-        // Compute the linear index of the neighboring cell
         int nn = zn * (NX * NY) + yn * NX + xn;
 
-        // Retrieve the flag of the neighboring cell
         int neighbor_flag = flags[nn];
 
         if (neighbor_flag == FLAG_SOLID) {
-            // Bounce-back condition: reflect to the opposite direction within the current cell
             f_new[n * Q + opposite[q]] = f[n * Q + q];
         }
         else if (neighbor_flag == FLAG_FLUID || neighbor_flag == FLAG_EQ) {
-            // Propagate to the neighboring cell (includes safe periodicity)
             f_new[nn * Q + q] = f[n * Q + q];
         }
     }
@@ -169,63 +173,67 @@ __kernel void streaming_kernel(
 // ----------------------------------------------------------------------------------------------------------------------
 
 __kernel void collision_kernel(
-    __global float* f,        // Input distribution function array
-    __global float* rho,      // Output density array
-    __global int* flags,      // Flags array indicating boundary conditions
-    __global float* u,        // Output velocity array
+    __global float* f,        // Distribution function (input/output)
+    __global float* rho,      // Prescribed density (used for EQ), also output
+    __global int* flags,      // Flag array: FLUID, SOLID, EQ
+    __global float* u,        // Prescribed velocity (used for EQ), also output
     float omega               // Relaxation parameter
 ) {
-    // Get the global ID of the current thread
     int n = get_global_id(0);
-    if (n >= N) return; // Prevent out-of-bounds access
+    if (n >= N) return;
 
-    // Retrieve the flag for the current cell
     int flag = flags[n];
 
-    // Skip collision for solid cells
     if (flag == FLAG_SOLID) return;
 
-    // Compute local density and velocity
     float local_rho = 0.0f;
     float ux = 0.0f, uy = 0.0f, uz = 0.0f;
 
-    // Loop over all velocity directions to calculate density and velocity
+    // Accumulate density and momentum from distributions
     #pragma unroll
     for (int q = 0; q < Q; q++) {
         float fq = f[n * Q + q];
-        local_rho += fq;                  // Accumulate density
-        ux += c[q][0] * fq;               // Accumulate x-velocity
-        uy += c[q][1] * fq;               // Accumulate y-velocity
-        uz += c[q][2] * fq;               // Accumulate z-velocity
+        local_rho += fq;
+        ux += c[q][0] * fq;
+        uy += c[q][1] * fq;
+        uz += c[q][2] * fq;
     }
 
-    // Normalize velocity by density, avoiding division by zero
     float inv_rho = (local_rho > 1e-10f) ? 1.0f / local_rho : 0.0f;
     ux *= inv_rho;
     uy *= inv_rho;
     uz *= inv_rho;
 
-    // Store macroscopic variables (density and velocity)
-    rho[n] = local_rho;
-    u[n * 3 + 0] = ux;
-    u[n * 3 + 1] = uy;
-    u[n * 3 + 2] = uz;
-
-    float u2 = ux * ux + uy * uy + uz * uz;                // Squared velocity magnitude
+    float u2;
 
     if (flag == FLAG_EQ) {
-        #pragma unroll    
-        for (int q = 0; q < Q; q++) {
-            float cu = c[q][0] * ux + c[q][1] * uy + c[q][2] * uz; // Dot product of velocity and direction vector
-            f[n * Q + q] = local_rho * w[q] * (1.0f + 3.0f * cu + 4.5f * cu * cu - 1.5f * u2); // Equilibrium distribution
-        }  
-    } else {
-        // Perform standard BGK collision for fluid cells
+        // Use prescribed velocity and density from host
+        ux = u[n * 3 + 0];
+        uy = u[n * 3 + 1];
+        uz = u[n * 3 + 2];
+        local_rho = rho[n];  // or fixed value like 1.0f
+
+        u2 = ux * ux + uy * uy + uz * uz;
+
         #pragma unroll
         for (int q = 0; q < Q; q++) {
-            float cu = c[q][0] * ux + c[q][1] * uy + c[q][2] * uz; // Dot product of velocity and direction vector
-            float feq = local_rho * w[q] * (1.0f + 3.0f * cu + 4.5f * cu * cu - 1.5f * u2); // Equilibrium distribution
-            f[n * Q + q] = (1.0f - omega) * f[n * Q + q] + omega * feq; // Relaxation towards equilibrium
+            float cu = c[q][0] * ux + c[q][1] * uy + c[q][2] * uz;
+            f[n * Q + q] = local_rho * w[q] * (1.0f + 3.0f * cu + 4.5f * cu * cu - 1.5f * u2);
+        }
+    } else {
+        // Standard collision (BGK) for fluid cells
+        rho[n] = local_rho;
+        u[n * 3 + 0] = ux;
+        u[n * 3 + 1] = uy;
+        u[n * 3 + 2] = uz;
+
+        u2 = ux * ux + uy * uy + uz * uz;
+
+        #pragma unroll
+        for (int q = 0; q < Q; q++) {
+            float cu = c[q][0] * ux + c[q][1] * uy + c[q][2] * uz;
+            float feq = local_rho * w[q] * (1.0f + 3.0f * cu + 4.5f * cu * cu - 1.5f * u2);
+            f[n * Q + q] = (1.0f - omega) * f[n * Q + q] + omega * feq;
         }
     }
 }

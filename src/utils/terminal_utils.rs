@@ -1,3 +1,8 @@
+/// Utility functions for terminal output with styled messages.
+///
+/// This module provides functions to print styled messages to the terminal,
+/// including warnings, logs, success messages, errors, and other formatted outputs.
+
 use colored::*;
 
 // Print a WARNING message with a prefix in bold yellow.
