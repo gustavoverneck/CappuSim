@@ -520,11 +520,17 @@ impl LBM {
     }
 
     pub fn calculate_vorticity(&self, x: usize, y: usize, z: usize) -> f32 {
+        let (vort_x, vort_y, vort_z) = self.calculate_vorticity_vector(x, y, z);
+    
+        (vort_x * vort_x + vort_y * vort_y + vort_z * vort_z).sqrt()
+    }
+
+    pub fn calculate_vorticity_vector(&self, x: usize, y: usize, z: usize) -> (f32, f32, f32) {
         let dx = 1.0;
         let dy = 1.0;
         let dz = 1.0;
-    
-        let get = |x, y, z, d| -> f32 {
+
+        let get = |x, y, z, d| {
             if x >= self.Nx || y >= self.Ny || z >= self.Nz {
                 0.0
             } else {
@@ -532,22 +538,19 @@ impl LBM {
                 self.u[i * 3 + d]
             }
         };
-    
-        // Curl components
+
         let du_dy = (get(x, y + 1, z, 0) - get(x, y.saturating_sub(1), z, 0)) / (2.0 * dy);
         let du_dz = (get(x, y, z + 1, 0) - get(x, y, z.saturating_sub(1), 0)) / (2.0 * dz);
-    
         let dv_dx = (get(x + 1, y, z, 1) - get(x.saturating_sub(1), y, z, 1)) / (2.0 * dx);
         let dv_dz = (get(x, y, z + 1, 1) - get(x, y, z.saturating_sub(1), 1)) / (2.0 * dz);
-    
         let dw_dx = (get(x + 1, y, z, 2) - get(x.saturating_sub(1), y, z, 2)) / (2.0 * dx);
         let dw_dy = (get(x, y + 1, z, 2) - get(x, y.saturating_sub(1), z, 2)) / (2.0 * dy);
-    
+
         let vort_x = dw_dy - dv_dz;
         let vort_y = du_dz - dw_dx;
         let vort_z = dv_dx - du_dy;
-    
-        (vort_x * vort_x + vort_y * vort_y + vort_z * vort_z).sqrt()
+
+        (vort_x, vort_y, vort_z)
     }
 
     pub fn calculate_q_criteria(&self, x: usize, y: usize, z: usize) -> f32 {
@@ -680,7 +683,87 @@ impl LBM {
                 z: chunk[2],
             })
             .collect();
-    }    
+    }
+
+    pub fn export_to_vtk(&self, filename: &str) -> std::io::Result<()> {
+        let mut file = File::create(filename)?;
+        let total_points = self.N;
+
+        writeln!(file, "# vtk DataFile Version 3.0")?;
+        writeln!(file, "LatteLab Simulation Output")?;
+        writeln!(file, "ASCII")?;
+        writeln!(file, "DATASET STRUCTURED_POINTS")?;
+        writeln!(file, "DIMENSIONS {} {} {}", self.Nx, self.Ny, self.Nz)?;
+        writeln!(file, "ORIGIN 0 0 0")?;
+        writeln!(file, "SPACING 1 1 1")?;
+        writeln!(file, "POINT_DATA {}", total_points)?;
+
+        // --- Density
+        writeln!(file, "SCALARS density float")?;
+        writeln!(file, "LOOKUP_TABLE default")?;
+        for i in 0..total_points {
+            writeln!(file, "{}", self.density[i])?;
+        }
+
+        // --- Velocity Magnitude
+        writeln!(file, "SCALARS velocity_magnitude float")?;
+        writeln!(file, "LOOKUP_TABLE default")?;
+        for i in 0..total_points {
+            let ux = self.u[i * 3 + 0];
+            let uy = self.u[i * 3 + 1];
+            let uz = self.u[i * 3 + 2];
+            let mag = (ux * ux + uy * uy + uz * uz).sqrt();
+            writeln!(file, "{}", mag)?;
+        }
+
+        // --- Velocity Vector
+        writeln!(file, "VECTORS velocity float")?;
+        for i in 0..total_points {
+            writeln!(
+                file,
+                "{} {} {}",
+                self.u[i * 3 + 0],
+                self.u[i * 3 + 1],
+                self.u[i * 3 + 2]
+            )?;
+        }
+
+        // --- Q-Criterion
+        writeln!(file, "SCALARS q_criterion float")?;
+        writeln!(file, "LOOKUP_TABLE default")?;
+        for z in 0..self.Nz {
+            for y in 0..self.Ny {
+                for x in 0..self.Nx {
+                    writeln!(file, "{}", self.calculate_q_criteria(x, y, z))?;
+                }
+            }
+        }
+
+        // --- Vorticity Magnitude
+        writeln!(file, "SCALARS vorticity_magnitude float")?;
+        writeln!(file, "LOOKUP_TABLE default")?;
+        for z in 0..self.Nz {
+            for y in 0..self.Ny {
+                for x in 0..self.Nx {
+                    let (wx, wy, wz) = self.calculate_vorticity_vector(x, y, z);
+                    writeln!(file, "{}", (wx * wx + wy * wy + wz * wz).sqrt())?;
+                }
+            }
+        }
+
+        // --- Vorticity Vector
+        writeln!(file, "VECTORS vorticity float")?;
+        for z in 0..self.Nz {
+            for y in 0..self.Ny {
+                for x in 0..self.Nx {
+                    let (wx, wy, wz) = self.calculate_vorticity_vector(x, y, z);
+                    writeln!(file, "{} {} {}", wx, wy, wz)?;
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
 
 pub fn n_from_xyz(x: &usize, y: &usize, z: &usize, Nx: &usize, Ny: &usize, Nz: &usize) -> usize {

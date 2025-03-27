@@ -7,10 +7,9 @@ mod core;
 mod utils;
 use core::lbm::LBM;
 use core::lbm::{FLAG_FLUID, FLAG_SOLID, FLAG_EQ};
-use std::fs::File;
+use std::fs::{File, create_dir_all};
 use std::io::{self, BufRead};
 use std::path::Path;
-
 
 // =============================================================================
 
@@ -126,6 +125,10 @@ fn main() {
 
     lbm.set_output_interval(50);
     lbm.run(10000);
+
+    // Create folder for VTK output
+    let _ = create_dir_all("vtk_output");
+    lbm.export_to_vtk("vtk_output/vkv_final_state.vtk").unwrap();
 }
 
 // =============================================================================
