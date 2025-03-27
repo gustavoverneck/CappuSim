@@ -1,6 +1,6 @@
 # ▶️ Usage Guide
 
-This guide walks you through how to compile, run, and visualize LatteLBM simulations.
+This guide walks you through how to compile, run, and visualize LatteLab simulations.
 
 ---
 
@@ -11,9 +11,9 @@ Make sure you have:
 - An OpenCL-compatible GPU and drivers
 
 ```bash
-git clone https://github.com/your-username/latte-lbm.git
-cd latte-lbm
-cargo build --release
+git clone https://github.com/gustavoverneck/LatteLab
+cd LatteLab
+cargo run
 ```
 
 ## 🧪 Running Simulations
