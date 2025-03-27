@@ -1,6 +1,6 @@
-# 🍵 LatteLBM
+# 🍵 LatteLab
 
-LatteLBM is a GPU-accelerated, OpenCL-based Lattice Boltzmann Method (LBM) simulator written in Rust.
+LatteLab is a GPU-accelerated, OpenCL-based Lattice Boltzmann Method (LBM) simulator written in Rust.
 
 It supports 2D and 3D simulations with multiple lattice models, dynamic boundary conditions, and output for visualization or analysis.
 
@@ -19,7 +19,6 @@ It supports 2D and 3D simulations with multiple lattice models, dynamic boundary
 - ⚙️ Models: D2Q9, D3Q7, D3Q15, D3Q19, D3Q27
 - 🧱 Solid / Fluid / Equilibrium boundaries
 - 🚀 GPU acceleration (OpenCL)
-- 📊 Vorticity and Q-Criterion computation
 - 📁 Output in CSV for plotting
 
 ---
