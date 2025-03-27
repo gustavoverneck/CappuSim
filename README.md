@@ -14,15 +14,22 @@ The library is **Open Source**, and contributions are highly encouraged. Whether
 **LatteLab** is currently in **pre-alpha** version and **not yet functional**. A working **alpha version** will be available soon. Stay tuned!  
 
 ## Installation  
-To use LatteLab, you will need to install specific versions of **cargo**, **rustc** and **ocl**: 
+To use LatteLab, you will need to install specific versions of **cargo** and **rust**: 
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
+To run it, clone the directory and execute it using cargo:
+
+```bash
+git clone https://github.com/gustavoverneck/LatteLab
+cd LatteLab
+cargo run
+```
 
 A package installation will be available in future releases.
 
-## How to Use  
+## Documentation
 The official documentation is under development and will provide comprehensive examples and API references.  
 
 ## License  
