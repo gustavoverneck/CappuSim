@@ -519,86 +519,82 @@ impl LBM {
         );
     }
 
-    fn calculate_vorticity(&self, x: usize, y: usize, z: usize) -> f32 {
-        let dx = 1.0; // Grid spacing in x-direction
-        let dy = 1.0; // Grid spacing in y-direction
-        let dz = 1.0; // Grid spacing in z-direction
-
-        let get_velocity = |x, y, z| {
+    pub fn calculate_vorticity(&self, x: usize, y: usize, z: usize) -> f32 {
+        let dx = 1.0;
+        let dy = 1.0;
+        let dz = 1.0;
+    
+        let get = |x, y, z, d| -> f32 {
             if x >= self.Nx || y >= self.Ny || z >= self.Nz {
-                Velocity::zero()
+                0.0
             } else {
-                let index = n_from_xyz(&x, &y, &z, &self.Nx, &self.Ny, &self.Nz);
-                Velocity {
-                    x: self.u[index * 3],
-                    y: self.u[index * 3 + 1],
-                    z: self.u[index * 3 + 2],
-                }
+                let i = n_from_xyz(&x, &y, &z, &self.Nx, &self.Ny, &self.Nz);
+                self.u[i * 3 + d]
             }
         };
-
-        let du_dy = (get_velocity(x, y + 1, z).x - get_velocity(x, y.saturating_sub(1), z).x) / (2.0 * dy);
-        let du_dz = (get_velocity(x, y, z + 1).x - get_velocity(x, y, z.saturating_sub(1)).x) / (2.0 * dz);
-
-        let dv_dx = (get_velocity(x + 1, y, z).y - get_velocity(x.saturating_sub(1), y, z).y) / (2.0 * dx);
-        let dv_dz = (get_velocity(x, y, z + 1).y - get_velocity(x, y, z.saturating_sub(1)).y) / (2.0 * dz);
-
-        let dw_dx = (get_velocity(x + 1, y, z).z - get_velocity(x.saturating_sub(1), y, z).z) / (2.0 * dx);
-        let dw_dy = (get_velocity(x, y + 1, z).z - get_velocity(x, y.saturating_sub(1), z).z) / (2.0 * dy);
-
-        // Vorticity components
-        let vorticity_x = dw_dy - dv_dz;
-        let vorticity_y = du_dz - dw_dx;
-        let vorticity_z = dv_dx - du_dy;
-
-        // Magnitude of vorticity
-        (vorticity_x.powi(2) + vorticity_y.powi(2) + vorticity_z.powi(2)).sqrt()
+    
+        // Curl components
+        let du_dy = (get(x, y + 1, z, 0) - get(x, y.saturating_sub(1), z, 0)) / (2.0 * dy);
+        let du_dz = (get(x, y, z + 1, 0) - get(x, y, z.saturating_sub(1), 0)) / (2.0 * dz);
+    
+        let dv_dx = (get(x + 1, y, z, 1) - get(x.saturating_sub(1), y, z, 1)) / (2.0 * dx);
+        let dv_dz = (get(x, y, z + 1, 1) - get(x, y, z.saturating_sub(1), 1)) / (2.0 * dz);
+    
+        let dw_dx = (get(x + 1, y, z, 2) - get(x.saturating_sub(1), y, z, 2)) / (2.0 * dx);
+        let dw_dy = (get(x, y + 1, z, 2) - get(x, y.saturating_sub(1), z, 2)) / (2.0 * dy);
+    
+        let vort_x = dw_dy - dv_dz;
+        let vort_y = du_dz - dw_dx;
+        let vort_z = dv_dx - du_dy;
+    
+        (vort_x * vort_x + vort_y * vort_y + vort_z * vort_z).sqrt()
     }
 
-    fn calculate_q_criteria(&self, x: usize, y: usize, z: usize) -> f32 {
-        let dx = 1.0; // Grid spacing in x-direction
-        let dy = 1.0; // Grid spacing in y-direction
-        let dz = 1.0; // Grid spacing in z-direction
-
-        let get_velocity = |x, y, z| {
+    pub fn calculate_q_criteria(&self, x: usize, y: usize, z: usize) -> f32 {
+        let dx = 1.0;
+        let dy = 1.0;
+        let dz = 1.0;
+    
+        let get = |x, y, z, d| -> f32 {
             if x >= self.Nx || y >= self.Ny || z >= self.Nz {
-                0.0 // Return a default f32 value
+                0.0
             } else {
-                let index = n_from_xyz(&x, &y, &z, &self.Nx, &self.Ny, &self.Nz);
-                self.u[index]
+                let i = n_from_xyz(&x, &y, &z, &self.Nx, &self.Ny, &self.Nz);
+                self.u[i * 3 + d]
             }
         };
-
-        let du_dx = (get_velocity(x + 1, y, z) - get_velocity(x.saturating_sub(1), y, z)) / (2.0 * dx);
-        let du_dy = (get_velocity(x, y + 1, z) - get_velocity(x, y.saturating_sub(1), z)) / (2.0 * dy);
-        let du_dz = (get_velocity(x, y, z + 1) - get_velocity(x, y, z.saturating_sub(1))) / (2.0 * dz);
-
-        let dv_dx = (get_velocity(x + 1, y, z) - get_velocity(x.saturating_sub(1), y, z)) / (2.0 * dx);
-        let dv_dy = (get_velocity(x, y + 1, z) - get_velocity(x, y.saturating_sub(1), z)) / (2.0 * dy);
-        let dv_dz = (get_velocity(x, y, z + 1) - get_velocity(x, y, z.saturating_sub(1))) / (2.0 * dz);
-
-        let dw_dx = (get_velocity(x + 1, y, z) - get_velocity(x.saturating_sub(1), y, z)) / (2.0 * dx);
-        let dw_dy = (get_velocity(x, y + 1, z) - get_velocity(x, y.saturating_sub(1), z)) / (2.0 * dy);
-        let dw_dz = (get_velocity(x, y, z + 1) - get_velocity(x, y, z.saturating_sub(1))) / (2.0 * dz);
-
-        // Symmetric part of the velocity gradient tensor (strain rate tensor)
+    
+        // Partial derivatives of velocity components
+        let du_dx = (get(x + 1, y, z, 0) - get(x.saturating_sub(1), y, z, 0)) / (2.0 * dx);
+        let du_dy = (get(x, y + 1, z, 0) - get(x, y.saturating_sub(1), z, 0)) / (2.0 * dy);
+        let du_dz = (get(x, y, z + 1, 0) - get(x, y, z.saturating_sub(1), 0)) / (2.0 * dz);
+    
+        let dv_dx = (get(x + 1, y, z, 1) - get(x.saturating_sub(1), y, z, 1)) / (2.0 * dx);
+        let dv_dy = (get(x, y + 1, z, 1) - get(x, y.saturating_sub(1), z, 1)) / (2.0 * dy);
+        let dv_dz = (get(x, y, z + 1, 1) - get(x, y, z.saturating_sub(1), 1)) / (2.0 * dz);
+    
+        let dw_dx = (get(x + 1, y, z, 2) - get(x.saturating_sub(1), y, z, 2)) / (2.0 * dx);
+        let dw_dy = (get(x, y + 1, z, 2) - get(x, y.saturating_sub(1), z, 2)) / (2.0 * dy);
+        let dw_dz = (get(x, y, z + 1, 2) - get(x, y, z.saturating_sub(1), 2)) / (2.0 * dz);
+    
+        // Symmetric (strain rate) tensor S_ij
         let s_xx = du_dx;
         let s_yy = dv_dy;
         let s_zz = dw_dz;
         let s_xy = 0.5 * (du_dy + dv_dx);
         let s_xz = 0.5 * (du_dz + dw_dx);
         let s_yz = 0.5 * (dv_dz + dw_dy);
-
-        // Anti-symmetric part of the velocity gradient tensor (vorticity tensor)
+    
+        // Anti-symmetric (vorticity) tensor W_ij
         let w_xy = 0.5 * (du_dy - dv_dx);
         let w_xz = 0.5 * (du_dz - dw_dx);
         let w_yz = 0.5 * (dv_dz - dw_dy);
-
-        // Q-criteria: Q = 0.5 * (||W||^2 - ||S||^2)
-        let norm_s = s_xx * s_xx + s_yy * s_yy + s_zz * s_zz + 2.0 * (s_xy * s_xy + s_xz * s_xz + s_yz * s_yz);
-        let norm_w = 2.0 * (w_xy * w_xy + w_xz * w_xz + w_yz * w_yz);
-
-        0.5 * (norm_w - norm_s)
+    
+        // Frobenius norms
+        let s_norm = s_xx.powi(2) + s_yy.powi(2) + s_zz.powi(2) + 2.0 * (s_xy.powi(2) + s_xz.powi(2) + s_yz.powi(2));
+        let w_norm = 2.0 * (w_xy.powi(2) + w_xz.powi(2) + w_yz.powi(2));
+    
+        0.5 * (w_norm - s_norm)
     }
 
     pub fn output_to(&self, path: &str) -> Result<(), Box<dyn Error>> {
