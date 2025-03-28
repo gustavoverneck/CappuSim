@@ -30,7 +30,7 @@ cargo run
 A package installation will be available in future releases.
 
 ## Documentation
-The official documentation is under development and can be accessed in ![Documentation](https://gustavoverneck.github.io/LatteLab/).  
+The official documentation is under development and can be accessed in [Documentation](https://gustavoverneck.github.io/LatteLab/).  
 
 ## License  
 This project is licensed under the **GNU General Public License v3.0**. For more details, see the [LICENSE](LICENSE) file.  
