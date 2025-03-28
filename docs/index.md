@@ -19,7 +19,7 @@ It supports 2D and 3D simulations with multiple lattice models, dynamic boundary
 - ⚙️ Models: D2Q9, D3Q7, D3Q15, D3Q19, D3Q27
 - 🧱 Solid / Fluid / Equilibrium boundaries
 - 🚀 GPU acceleration (OpenCL)
-- 📁 Output in CSV for plotting
+- 📁 Output in CSV for plotting and VTK for Paraview post-processing.
 
 ---
 
@@ -27,7 +27,7 @@ It supports 2D and 3D simulations with multiple lattice models, dynamic boundary
 
 | Case                    | File                        |
 |-------------------------|-----------------------------|
-| Lid-Driven Cavity       | `liddriven_cavity.rs`       |
-| Poiseuille Flow         | `poiseuille.rs`             |
-| Taylor-Green Vortex     | `taylor_green_vortex.rs`    |
-| Von Kármán Vortex Street| `von_karman_vortex.rs`      |
+| 2D Lid-Driven Cavity       | `liddriven_cavity.rs`       |
+| 2D Poiseuille Flow         | `poiseuille.rs`             |
+| 2D Taylor-Green Vortex     | `taylor_green_vortex.rs`    |
+| 2D Von Kármán Vortex Street| `von_karman_vortex.rs`      |
