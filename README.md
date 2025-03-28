@@ -1,6 +1,8 @@
 
 # LatteLab
 
+![fundo_lattelab](https://github.com/user-attachments/assets/4459088f-68cc-4b72-b37a-efd6ee2d50c5)
+
 ![Rust](https://img.shields.io/badge/rust-%23000000.svg?style=for-the-badge&logo=rust&logoColor=white)
 
 ![License: GNU v3](https://img.shields.io/badge/License-GNU%20v3-blue.svg)  
