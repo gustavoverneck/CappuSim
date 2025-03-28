@@ -14,66 +14,83 @@ use std::path::Path;
 // =============================================================================
 
 // // Taylor-Green Vortex example
-fn main() {
-    let nx = 128;
-    let ny = 128;
-    let nz = 1;
+// fn main() {
+//     let nx = 128;
+//     let ny = 128;
+//     let nz = 1;
 
-    let viscosity = 0.01;
-    let u0 = 0.1;
-    let model = "D2Q9".to_string();
+//     let viscosity = 0.01;
+//     let u0 = 0.1;
+//     let model = "D2Q9".to_string();
 
-    let mut lbm = LBM::new(nx, ny, nz, model, viscosity);
+//     let mut lbm = LBM::new(nx, ny, nz, model, viscosity);
 
-    // Initial condition: Taylor-Green vortex
-    lbm.set_conditions(|lbm, x, y, _z, n| {
-        let pi = std::f32::consts::PI;
-        let lx = nx as f32;
-        let ly = ny as f32;
+//     // Initial condition: Taylor-Green vortex
+//     lbm.set_conditions(|lbm, x, y, _z, n| {
+//         let pi = std::f32::consts::PI;
+//         let lx = nx as f32;
+//         let ly = ny as f32;
 
-        let fx = x as f32 / lx;
-        let fy = y as f32 / ly;
+//         let fx = x as f32 / lx;
+//         let fy = y as f32 / ly;
 
-        lbm.flags[n] = FLAG_FLUID;
-        lbm.density[n] = 1.0;
+//         lbm.flags[n] = FLAG_FLUID;
+//         lbm.density[n] = 1.0;
 
-        lbm.velocity[n].x = -u0 * (2.0 * pi * fx).cos() * (2.0 * pi * fy).sin();
-        lbm.velocity[n].y =  u0 * (2.0 * pi * fx).sin() * (2.0 * pi * fy).cos();
-        lbm.velocity[n].z = 0.0;
-    });
+//         lbm.velocity[n].x = -u0 * (2.0 * pi * fx).cos() * (2.0 * pi * fy).sin();
+//         lbm.velocity[n].y =  u0 * (2.0 * pi * fx).sin() * (2.0 * pi * fy).cos();
+//         lbm.velocity[n].z = 0.0;
+//     });
 
-    lbm.set_output_vtk(true);
-    lbm.set_output_interval(100);
-    lbm.run(5000);
-    lbm.export_to_vtk("vtk_output/taylor_green_final.vtk").unwrap();
-}
+//     lbm.set_output_vtk(true);
+//     lbm.set_output_interval(200);
+//     lbm.run(10000);
+//     //lbm.export_to_vtk("vtk_output/taylor_green_final.vtk").unwrap();
+// }
 
 
 // Poiseuille Flow example
-// fn main() {
-//     let nx = 128;
-//     let ny = 64;
-//     let viscosity = 0.01;
-//     let pressure_gradient = 1e-5;
-//     let t_max = 500;
+fn main() {
+    let nx = 256;
+    let ny = 64;
+    let nz = 1;
 
-//     // Initialize LBM simulation
-//     let mut lbm = LBM::new(nx, ny, 1, "D2Q9".to_string(), viscosity);
+    let viscosity = 0.05;
+    let u0 = 0.1;
+    let steps = 20000;
+    let output_interval = 19999;
 
-//     // Set initial conditions: constant velocity at the inlet (left boundary)
-//     lbm.set_conditions(|lbm, x, y, z, n| {
-//         if x == 0 {
-//             lbm.velocity[n].x = 0.1; // Set a constant velocity at the inlet
-//             lbm.velocity[n].y = 0.0;
-//         } else {
-//             lbm.velocity[n].x = 0.0; // Set velocity to zero elsewhere
-//             lbm.velocity[n].y = 0.0;
-//         }
-//     });
+    let mut lbm = LBM::new(nx, ny, nz, "D2Q9".to_string(), viscosity);
 
-//     lbm.set_output_interval(10);
-//     lbm.run(t_max);
-// }
+    lbm.set_conditions(|lbm, x, y, _z, n| {
+        if y == 0 || y == ny - 1 {
+            // Top and bottom walls
+            lbm.flags[n] = FLAG_SOLID;
+        } else if ((x == 0) && (y < ny -1)) {
+            // Inlet: left boundary
+            lbm.flags[n] = FLAG_EQ;
+            lbm.velocity[n].x = u0;
+            lbm.velocity[n].y = 0.0;
+            lbm.density[n] = 1.0;
+        } else if x == nx - 1 && (y < ny -1) {
+            // Outlet: right boundary
+            lbm.flags[n] = FLAG_EQ;
+            lbm.velocity[n].x = u0;
+            lbm.velocity[n].y = 0.0;
+            lbm.density[n] = 1.0;
+        } else {
+            // Interior: fluid
+            lbm.flags[n] = FLAG_FLUID;
+            lbm.velocity[n].x = u0;
+            lbm.velocity[n].y = 0.0;
+            lbm.density[n] = 1.0;
+        }
+    });
+    lbm.set_output_vtk(true);
+    lbm.set_output_interval(output_interval);
+    lbm.run(steps);
+    lbm.export_to_vtk("output/poiseuille.vtk").unwrap();
+}
 
 // =============================================================================
 
@@ -124,13 +141,9 @@ fn main() {
 //             lbm.density[n] = 1.0;
 //         }
 //     });
-
+//     lbm.set_output_vtk(true);
 //     lbm.set_output_interval(50);
 //     lbm.run(10000);
-
-//     // Create folder for VTK output
-//     let _ = create_dir_all("vtk_output");
-//     lbm.export_to_vtk("vtk_output/vkv_final_state.vtk").unwrap();
 // }
 
 // =============================================================================
@@ -169,3 +182,50 @@ fn main() {
 // }
 
 // =============================================================================
+
+// // Splash
+// fn main() {
+// --- Simulation parameters ---
+//     let nx = 256;
+//     let ny = 128;
+//     let nz = 1;
+//     let viscosity = 0.01;
+//     let u0 = 0.2;
+//     let output_interval = 200;
+//     let steps = 5000;
+
+//     let model = "D2Q9".to_string();
+//     let mut lbm = LBM::new(nx, ny, nz, model, viscosity);
+
+//     // --- Jet parameters ---
+//     let jet_width = nx / 16;
+//     let jet_center = nx / 2;
+//     let jet_start = jet_center - jet_width;
+//     let jet_end = jet_center + jet_width;
+
+//     // --- Initial conditions: LatteSplash™ ---
+//     lbm.set_conditions(|lbm, x, y, _z, n| {
+//         if y == 0 {
+//             lbm.flags[n] = FLAG_SOLID; // ground
+//         } else if y == ny - 1 && x >= jet_start && x <= jet_end {
+//             lbm.flags[n] = FLAG_EQ; // inlet (jet)
+//             lbm.velocity[n].x = 0.0;
+//             lbm.velocity[n].y = -u0;
+//             lbm.density[n] = 1.0;
+//         } else if x == 0 || x == nx - 1 {
+//             lbm.flags[n] = FLAG_SOLID; // side walls
+//         } else {
+//             lbm.flags[n] = FLAG_FLUID;
+//             lbm.velocity[n].x = 0.0;
+//             lbm.velocity[n].y = 0.0;
+//             lbm.density[n] = 1.0;
+//         }
+//     });
+
+//     // --- Output parameters ---
+//     lbm.set_output_vtk(true);
+//     lbm.set_output_interval(output_interval);
+
+//     // --- Run simulation ---
+//     lbm.run(steps);
+// }
