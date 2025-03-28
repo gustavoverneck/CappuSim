@@ -1,6 +1,6 @@
 # 🧠 Lattice Boltzmann Method (LBM) – Theory
 
-LatteLBM simulates fluid dynamics using the Lattice Boltzmann Method (LBM), a mesoscopic approach based on particle distributions.
+LatteLab simulates fluid dynamics using the Lattice Boltzmann Method (LBM), a mesoscopic approach based on particle distributions.
 
 ---
 
@@ -9,11 +9,12 @@ LatteLBM simulates fluid dynamics using the Lattice Boltzmann Method (LBM), a me
 Each time step performs the following operations:
 
 1. **Collision** – relaxes the distribution toward equilibrium:
-   f[q] ← f[q] - ω (f[q] - f_eq[q])
 
-2. **Streaming** – shifts each distribution `f[q]` to the neighboring cell along its direction `c[q]`.
+   `f[q] ← f[q] - ω (f[q] - f_eq[q])`
 
-3. **Swap** – replaces the old distribution with the streamed one (`f_new → f`) for the next iteration.
+3. **Streaming** – shifts each distribution `f[q]` to the neighboring cell along its direction `c[q]`.
+
+4. **Swap** – replaces the old distribution with the streamed one (`f_new → f`) for the next iteration.
 
 ---
 
@@ -37,11 +38,11 @@ Where:
 These are derived from the distribution functions as:
 
 - **Density**:
-  ρ = Σ f[q]
+  `ρ = Σ f[q]`
 
 
 - **Velocity**:
-u = (1 / ρ) * Σ f[q] * c[q]
+`u = (1 / ρ) * Σ f[q] * c[q]`
 
 
 These calculations are performed in the `collision_kernel` before updating the distributions.
@@ -71,7 +72,7 @@ This effectively enforces zero velocity at the wall.
 
 The relaxation parameter `ω` controls viscosity:
 
-ν = (1 / ω - 0.5) / 3
+`ν = (1 / ω - 0.5) / 3`
 
 Guidelines:
 
@@ -89,7 +90,7 @@ LatteLBM computes:
 - **Q-Criterion**: vortex identification
 
 The Q-criterion is defined as:
-Q = 0.5 * (‖W‖² - ‖S‖²)
+`Q = 0.5 * (‖W‖² - ‖S‖²)`
 
 
 Where `W` is the rotation tensor and `S` is the strain-rate tensor.
