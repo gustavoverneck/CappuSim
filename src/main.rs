@@ -12,8 +12,20 @@ use std::io::{self, BufRead};
 use std::path::Path;
 
 // =============================================================================
+// Benchmark
+// fn main() {
+//     let nx = 128;
+//     let ny = 128;
+//     let nz = 128;
+//     let viscosity = 0.1;
+//     let time_steps = 50;
+//     let mut lbm = LBM::new(nx, ny, nz, "D3Q19".to_string(), viscosity);
+//     lbm.run(time_steps);
+// }
 
-// // Taylor-Green Vortex example
+// =============================================================================
+
+// // 2D Taylor-Green Vortex example
 // fn main() {
 //     let nx = 128;
 //     let ny = 128;
@@ -49,52 +61,52 @@ use std::path::Path;
 // }
 
 
-// Poiseuille Flow example
-fn main() {
-    let nx = 256;
-    let ny = 64;
-    let nz = 1;
+// 2D Poiseuille Flow example
+// fn main() {
+//     let nx = 256;
+//     let ny = 64;
+//     let nz = 1;
 
-    let viscosity = 0.05;
-    let u0 = 0.1;
-    let steps = 20000;
-    let output_interval = 19999;
+//     let viscosity = 0.05;
+//     let u0 = 0.1;
+//     let steps = 20000;
+//     let output_interval = 19999;
 
-    let mut lbm = LBM::new(nx, ny, nz, "D2Q9".to_string(), viscosity);
+//     let mut lbm = LBM::new(nx, ny, nz, "D2Q9".to_string(), viscosity);
 
-    lbm.set_conditions(|lbm, x, y, _z, n| {
-        if y == 0 || y == ny - 1 {
-            // Top and bottom walls
-            lbm.flags[n] = FLAG_SOLID;
-        } else if ((x == 0) && (y < ny -1)) {
-            // Inlet: left boundary
-            lbm.flags[n] = FLAG_EQ;
-            lbm.velocity[n].x = u0;
-            lbm.velocity[n].y = 0.0;
-            lbm.density[n] = 1.0;
-        } else if x == nx - 1 && (y < ny -1) {
-            // Outlet: right boundary
-            lbm.flags[n] = FLAG_EQ;
-            lbm.velocity[n].x = u0;
-            lbm.velocity[n].y = 0.0;
-            lbm.density[n] = 1.0;
-        } else {
-            // Interior: fluid
-            lbm.flags[n] = FLAG_FLUID;
-            lbm.velocity[n].x = u0;
-            lbm.velocity[n].y = 0.0;
-            lbm.density[n] = 1.0;
-        }
-    });
-    lbm.set_output_vtk(true);
-    lbm.set_output_interval(output_interval);
-    lbm.run(steps);
-    lbm.export_to_vtk("output/poiseuille.vtk").unwrap();
-}
+//     lbm.set_conditions(|lbm, x, y, _z, n| {
+//         if y == 0 || y == ny - 1 {
+//             // Top and bottom walls
+//             lbm.flags[n] = FLAG_SOLID;
+//         } else if ((x == 0) && (y < ny -1)) {
+//             // Inlet: left boundary
+//             lbm.flags[n] = FLAG_EQ;
+//             lbm.velocity[n].x = u0;
+//             lbm.velocity[n].y = 0.0;
+//             lbm.density[n] = 1.0;
+//         } else if x == nx - 1 && (y < ny -1) {
+//             // Outlet: right boundary
+//             lbm.flags[n] = FLAG_EQ;
+//             lbm.velocity[n].x = u0;
+//             lbm.velocity[n].y = 0.0;
+//             lbm.density[n] = 1.0;
+//         } else {
+//             // Interior: fluid
+//             lbm.flags[n] = FLAG_FLUID;
+//             lbm.velocity[n].x = u0;
+//             lbm.velocity[n].y = 0.0;
+//             lbm.density[n] = 1.0;
+//         }
+//     });
+//     lbm.set_output_vtk(true);
+//     lbm.set_output_interval(output_interval);
+//     lbm.run(steps);
+//     lbm.export_to_vtk("output/poiseuille.vtk").unwrap();
+// }
 
 // =============================================================================
 
-// Von-Kármán Vortex Street Example
+// 2D Von-Kármán Vortex Street Example
 // fn main() {
 //     let nx = 256;
 //     let ny = 128;
@@ -148,7 +160,7 @@ fn main() {
 
 // =============================================================================
 
-// Lid-driven Cavity example
+// 2D Lid-driven Cavity example
 // fn main() {
 //     let nx = 128;
 
@@ -183,7 +195,7 @@ fn main() {
 
 // =============================================================================
 
-// // Splash
+// 2D Splash example
 // fn main() {
 // --- Simulation parameters ---
 //     let nx = 256;

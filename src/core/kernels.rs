@@ -147,7 +147,6 @@ __kernel void streaming_kernel(
     int y = (n / NX) % NY;
     int z = n / (NX * NY);
 
-    #pragma unroll
     for (int q = 0; q < Q; q++) {
         int dx = c[q][0];
         int dy = c[q][1];
@@ -190,7 +189,6 @@ __kernel void collision_kernel(
     float ux = 0.0f, uy = 0.0f, uz = 0.0f;
 
     // Accumulate density and momentum from distributions
-    #pragma unroll
     for (int q = 0; q < Q; q++) {
         float fq = f[n * Q + q];
         local_rho += fq;
@@ -215,7 +213,7 @@ __kernel void collision_kernel(
 
         u2 = ux * ux + uy * uy + uz * uz;
 
-        #pragma unroll
+
         for (int q = 0; q < Q; q++) {
             float cu = c[q][0] * ux + c[q][1] * uy + c[q][2] * uz;
             f[n * Q + q] = local_rho * w[q] * (1.0f + 3.0f * cu + 4.5f * cu * cu - 1.5f * u2);
@@ -229,7 +227,7 @@ __kernel void collision_kernel(
 
         u2 = ux * ux + uy * uy + uz * uz;
 
-        #pragma unroll
+
         for (int q = 0; q < Q; q++) {
             float cu = c[q][0] * ux + c[q][1] * uy + c[q][2] * uz;
             float feq = local_rho * w[q] * (1.0f + 3.0f * cu + 4.5f * cu * cu - 1.5f * u2);
@@ -276,7 +274,6 @@ __kernel void equilibrium(
     float local_rho = rho[n];
 
     // Loop over all velocity directions
-    #pragma unroll
     for (int q = 0; q < Q; q++) {
         // Compute the dot product of velocity and direction vector
         float cu = c[q][0] * ux + c[q][1] * uy + c[q][2] * uz;
