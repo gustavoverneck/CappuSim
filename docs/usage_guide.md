@@ -34,6 +34,8 @@ x, y, z, rho, ux, uy, uz, v, q
 ```
 You can open this in Python, Paraview, or other tools for analysis.
 
+Results also can be saved in .vtk format, for Paraview post-processing.
+
 ## 🧊 Boundary Flags
 
 | Flag         | Description                          |
