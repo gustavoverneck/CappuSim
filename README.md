@@ -1,11 +1,13 @@
 
 # LatteLab
 
-![fundo_lattelab](https://github.com/user-attachments/assets/4459088f-68cc-4b72-b37a-efd6ee2d50c5)
-
 ![Rust](https://img.shields.io/badge/rust-%23000000.svg?style=for-the-badge&logo=rust&logoColor=white)
 
 ![License: GNU v3](https://img.shields.io/badge/License-GNU%20v3-blue.svg)  
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/4459088f-68cc-4b72-b37a-efd6ee2d50c5" alt="fundo_lattelab" />
+</p> 
 
 ## Description  
 **LatteLab** is a Rust software for computational fluid dynamics (CFD) simulations based on the **Lattice Boltzmann Method (LBM)**. This project is part of my Master's Degree in Physics and aims to provide an efficient and flexible tool for LBM simulations, leveraging [opencl](https://www.khronos.org/opencl/) for GPU acceleration.  
