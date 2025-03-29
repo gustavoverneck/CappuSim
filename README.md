@@ -14,6 +14,7 @@ The library is **Open Source**, and contributions are highly encouraged. Whether
 
 ## Current State and road map
 **LatteLab** is currently in **alpha** and appears **functional**, but no yet validated. A validated **beta version** will be available soon. Stay tuned!
+
 The possibilities for the future include:
 - GUI
 - Python interface
