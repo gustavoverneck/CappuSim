@@ -13,7 +13,7 @@
 The library is **Open Source**, and contributions are highly encouraged. Whether you're an academic researcher or just curious about fluid dynamics, you're welcome to contribute!  
 
 ## Current State  
-**LatteLab** is currently in **pre-alpha** version and **not yet functional**. A working **alpha version** will be available soon. Stay tuned!  
+**LatteLab** is currently in **alpha** and appears **functional**, but no yet validated. A validated **beta version** will be available soon. Stay tuned!
 
 ## Installation  
 To use LatteLab, you will need to install specific versions of **cargo** and **rust**: 
