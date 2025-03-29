@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>LatteLab - Usage Guide</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="favicon.png">
+</head>
+<body>
+  <header>
+    <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
+      <img src="favicon.png" alt="LatteLab Logo">
+      <h1>LatteLab</h1>
+    </div>
+  </header>
+  <nav>
+    <a href="index.html">Home</a>
+    <a href="usage_guide.html">Usage Guide</a>
+    <a href="lbm_theory.html">LBM Theory</a>
+    <a href="lattelab_doc.html">Documentation</a>
+  </nav>
+  <main>
+    <p>
+      <h1>▶️ Usage Guide</h1>
+    </p>
+    <p>This guide walks you through how to compile, run, and visualize LatteLab simulations.</p>
+    <p>---</p>
+    <p>
+      <h2>⚙️ Build the Project</h2>
+    </p>
+    <p>
+      Make sure you have:
+      <ul>
+        <li><code>Rust</code> (https://rust-lang.org)</li>
+        <li>An OpenCL-compatible GPU and drivers</li>
+      </ul>
+    </p>
+    <p>
+      <pre><code class="language-bash"></code>
+      git clone https://github.com/gustavoverneck/LatteLab
+      cd LatteLab
+      cargo run
+      </code></pre>
+    </p>
+    <p>
+      <h2>🧪 Running Simulations</h2>
+      Each example is a separate <code>main()</code> function in <code>main.rs</code>. You can swap between them by commenting/uncommenting.
+    </p>
+    <p>
+      <pre><code class="language-bash"></code>
+        cargo run
+        </code></pre>
+    </p>
+    <p>
+      <h2>🌟 Custom Initial Conditions</h2>
+      You can define custom initial conditions by modifying the <code>lbm.set_condition()</code> function in <code>main.rs</code>. This function allows you to set the initial velocity, density, and flags for your simulation. Tailor these values to match your specific use case or experiment.
+      Example  (2D Von-Kármán Vortex):
+      <pre><code class="language-rust">
+      fn main() {
+        let nx = 256;
+        let ny = 128;
+
+        let viscosity = 0.01;
+        let omega = 1.0 / (3.0 * viscosity + 0.5);
+        let u0 = 0.1;
+
+        // Initialize LBM simulation
+        let mut lbm = LBM::new(nx, ny, 1, "D2Q9".to_string(), viscosity);
+
+        // Cylinder parameters
+        let radius = nx as f32 * 0.08;
+        let cx = nx as i32 / 4; // 25% from left
+        let cy = ny as i32 / 2;
+
+        lbm.set_conditions(|lbm, x, y, _z, n| {
+          let dx = x as i32 - cx;
+          let dy = y as i32 - cy;
+          let dist = ((dx * dx + dy * dy) as f32).sqrt();
+
+          if dist <= radius {
+            lbm.flags[n] = FLAG_SOLID; // Cylinder obstacle
+          } else if x == 0 {
+            // Inlet with prescribed velocity
+            lbm.flags[n] = FLAG_EQ;
+            lbm.velocity[n].x = u0;
+            lbm.velocity[n].y = 0.0;
+            lbm.density[n] = 1.0;
+          } else if x == nx - 1 {
+            // Outflow
+            lbm.flags[n] = FLAG_EQ;
+            lbm.velocity[n].x = u0;
+            lbm.velocity[n].y = 0.0;
+            lbm.density[n] = 1.0;
+          } else if y == 0 || y == ny - 1 {
+            // Top and bottom walls
+            lbm.flags[n] = FLAG_SOLID;
+          } else {
+            // Normal fluid region
+            lbm.flags[n] = FLAG_FLUID;
+            lbm.velocity[n].x = u0;
+            lbm.velocity[n].y = 0.0;
+            lbm.density[n] = 1.0;
+          }
+        });
+
+        lbm.set_output_vtk(true);
+        lbm.set_output_interval(50);
+        lbm.run(10000);
+      }
+      </code></pre>
+    </p>
+    <p>
+      <h2>🧾 Output Format</h2>
+      Results are saved in <code>output/data_XXXX.csv</code> or <code>output/data_XXXX.vtk</code>. You can activate output by typing:
+      <pre><code class="language-rust">
+      // to enable csv output
+        lbm.set_output_csv(true);
+
+      // to enable vtk output
+      lbm.set_output_vtk(true);
+
+      // to set output interval
+      lbm.set_output_interval(integer_interval);
+      </code></pre>
+      Each file contains: coordinates, density, velocity, viscosity , q-criterion
+    </p>
+  </main>
+</body>
+</html>

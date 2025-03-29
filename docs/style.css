@@ -1,0 +1,103 @@
+
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+:root {
+  --bg: #F8E8BF;
+  --text: #2f1e13;
+  --primary: #7c4a25;
+  --accent: #3f9ea1;
+  --card-bg: #ffffff;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Press Start 2P', monospace;
+  background-color: var(--bg);
+  color: var(--text);
+  line-height: 2;
+  font-size: 12px;
+}
+
+header {
+  background-color: var(--bg);
+  text-align: center;
+  padding: 2rem 1rem 1rem;
+}
+
+header img {
+  width: 100px;
+  margin-bottom: 0.5rem;
+}
+
+header h1 {
+  font-size: 2.0rem;
+  color: var(--text);
+}
+
+header p {
+  font-size: 0.8rem;
+  color: var(--text);
+  max-width: 800px;
+  margin: 0 auto;
+  padding-top: 0.5rem;
+}
+
+nav {
+  background-color: var(--primary);
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+  padding: 1rem;
+  flex-wrap: wrap;
+}
+
+nav a {
+  color: white;
+  text-decoration: none;
+  font-weight: 600;
+  transition: opacity 0.2s ease;
+}
+
+nav a:hover {
+  opacity: 0.7;
+}
+
+main {
+  max-width: 1100px;
+  margin: 2rem auto;
+  padding: 3rem;
+  background-color: var(--card-bg);
+  border-radius: 16px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+  outline: 3px solid var(--accent); /* Added accent-colored outline */
+}
+
+main p {
+  margin-bottom: 1.5rem;
+}
+
+h1, h2, h3 {
+  color: var(--primary);
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+}
+
+code {
+  background: #eee;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: monospace;
+}
+
+pre {
+  background: #eee;
+  padding: 1rem;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 1rem 0;
+}

@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <title>LatteLab - Lbm Theory</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" href="favicon.png">
+  </head>
+  <body>
+    <header>
+      <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
+        <img src="favicon.png" alt="LatteLab Logo">
+        <h1>LatteLab</h1>
+      </div>
+    </header>
+    <nav>
+      <a href="index.html">Home</a>
+      <a href="usage_guide.html">Usage Guide</a>
+      <a href="lbm_theory.html">LBM Theory</a>
+      <a href="lattelab_doc.html">Documentation</a>
+    </nav>
+    <main>
+      <p>
+        <h1>🧠 Lattice Boltzmann Method (LBM) – Theory</h1>
+      </p>
+      <p>
+        LatteLBM simulates fluid dynamics using the Lattice Boltzmann Method (LBM), a mesoscopic approach based on particle distributions.
+      </p>
+      <p>---</p>
+      <p>
+        <h2>🔁 LBM Update Cycle</h2>
+      </p>
+      <p>Each time step performs the following operations:</p>
+      <p>
+        1. <strong>Collision</strong> – relaxes the distribution toward equilibrium:
+        <br> f[q] = (1 - ω) * f[q] + ω * f_eq[q]
+      </p>
+      <p>
+        2. <strong>Streaming</strong> – shifts each distribution <code>f[q]</code> to the neighboring cell along its direction <code>c[q]</code>.
+      </p>
+      <p>
+        3. <strong>Swap</strong> – replaces the old distribution with the streamed one (<code>f_new → f</code>) for the next iteration.
+      </p>
+      <p>---</p>
+      <p>
+        <h2>⚙️ Collision and Equilibrium</h2>
+      </p>
+      <p>
+        The equilibrium distribution is defined by a second-order approximation of the Maxwell-Boltzmann distribution:
+        <div style="text-align: center; margin-top: 1em;">
+          f_eq[q] = ρ <em> w[q] </em> (1 + 3(c·u) + 4.5(c·u)^2 - 1.5(u·u))
+        </div>
+      </p>
+      <p>Where:</p>
+      <p>
+        <ul>
+          <li><code>ρ</code> is the local density</li>
+          <li><code>u</code> is the macroscopic velocity</li>
+          <li><code>c[q]</code> is the discrete lattice velocity in direction <code>q</code></li>
+          <li><code>w[q]</code> is the corresponding lattice weight</li>
+        </ul>
+      </p>
+      <p>---</p>
+      <p>
+        <h2>📦 Macroscopic Quantities</h2>
+      </p>
+      <p>These are derived from the distribution functions as:</p>
+      <p>
+        <li><strong>Density</strong>:</li>
+        ρ = Σ f[q]
+      </p>
+      <p>
+        <li><strong>Velocity</strong>:</li>
+        u = (1 / ρ) <em> Σ f[q] </em> c[q]
+      </p>
+      <p>
+        These calculations are performed in the <code>collision_kernel</code> before updating the distributions.
+      </p>
+      <p>---</p>
+      <p>
+        <h2>🧱 Boundary Conditions</h2>
+      </p>
+      <p>LatteLab supports three types of boundary flags per node:</p>
+      <div style="display: flex; justify-content: center; margin-top: 1em;">
+        <table border="1" cellspacing="0" cellpadding="8" style="border-collapse: collapse; width: 80%; text-align: center;">
+          <thead style="background-color: #f5f5f5;">
+            <tr>
+              <th>Flag</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>FLUID</code></td>
+              <td>Common fluid cell (collision + streaming)</td>
+            </tr>
+            <tr>
+              <td><code>SOLID</code></td>
+              <td>No-slip wall using bounce-back condition</td>
+            </tr>
+            <tr>
+              <td><code>EQ</code></td>
+              <td>Prescribed equilibrium (used for inlets, lids, etc.)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>---</p>
+      <p>
+        <h2>💡 LatteLab Viscosity Guidelines</h2>
+<p>
+In LatteLab, viscosity <code>ν</code> is the primary physical input. It affects flow stability, accuracy, and realism.
+</p>
+
+<div style="display: flex; justify-content: center; margin-top: 1em;">
+  <table border="1" cellspacing="0" cellpadding="8" style="border-collapse: collapse; width: 80%; text-align: center;">
+    <thead style="background-color: #f5f5f5;">
+      <tr>
+        <th>Viscosity <code>ν</code></th>
+        <th>Description</th>
+        <th>Stability</th>
+        <th>Recommended Use</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>&gt; 0.1</code></td>
+        <td>Very diffusive</td>
+        <td>✅ Very stable</td>
+        <td>Testing, high-viscosity flows</td>
+      </tr>
+      <tr>
+        <td><code>0.01 – 0.1</code></td>
+        <td>Standard LBM range</td>
+        <td>✅ Stable</td>
+        <td>General laminar flows</td>
+      </tr>
+      <tr>
+        <td><code>0.005 – 0.01</code></td>
+        <td>Low viscosity</td>
+        <td>⚠️ Semi-stable</td>
+        <td>Moderate Reynolds number</td>
+      </tr>
+      <tr>
+        <td><code>0.001 – 0.005</code></td>
+        <td>Near-turbulent</td>
+        <td>⚠️ Risky</td>
+        <td>Sharp gradients, high Re flows</td>
+      </tr>
+      <tr>
+        <td><code>&lt; 0.001</code></td>
+        <td>Extremely low viscosity</td>
+        <td>❌ Unstable</td>
+        <td>Only with MRT or double precision</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<p style="margin-top: 1em;">
+<strong>Note:</strong> Choose <code>ν</code> carefully based on the resolution and time step. For most stable simulations, stay within <code>ν ≈ 0.01 – 0.1</code>.
+</p>
+      <p>---</p>
+      <p>
+        <h2>🔬 Vorticity and Q-Criterion</h2>
+      </p>
+      <p>LatteLab computes:</p>
+      <p>
+        <li><strong>Vorticity (‖∇ × u‖)</strong>: local fluid rotation</li>
+        <li><strong>Q-Criterion</strong>: vortex identification</li>
+      </p>
+      <p>
+        The Q-criterion is defined as:
+        Q = 0.5 * (‖W‖² - ‖S‖²)
+      </p>
+      <p>
+        Where <code>W</code> is the rotation tensor and <code>S</code> is the strain-rate tensor.
+      </p>
+      <p>
+        These metrics are computed on the host (in Rust) after the simulation step.
+      </p>
+      <p>---</p>
+      <p>
+        <h2>🔢 Lattice Models</h2>
+      </p>
+      <p>LatteLBM supports multiple velocity models (lattices), including:</p>
+      <p>
+        <li><code>D2Q9</code> — standard 2D model</li>
+        <li><code>D3Q7</code>, <code>D3Q15</code>, <code>D3Q19</code>, <code>D3Q27</code> — for 3D</li>
+      </p>
+      <p>
+        All kernel data (velocity vectors <code>c[q]</code>, weights <code>w[q]</code>, and opposites) is loaded dynamically based on the selected model at initialization.
+      </p>
+      <p>---</p>
+      <p>
+        <h2>📚 References</h2>
+      </p>
+      <p>
+        <ul>
+          <li>Krüger, T. et al. <em>The Lattice Boltzmann Method</em> (Springer, 2017)</li>
+          <li>Succi, S. <em>The Lattice Boltzmann Equation for Fluid Dynamics and Beyond</em> (Oxford, 2001)</li>
+          <li>Mohamad, A. A. <em>Lattice Boltzmann Method: Fundamentals and Engineering Applications with Computer Codes</em> (Springer, 2011)</li>
+          <li>FluidX3D and other open-source solvers.</li>
+        </ul>
+      </p>
+    </main>
+  </body>
+</html>

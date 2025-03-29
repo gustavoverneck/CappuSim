@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LatteLab - Index</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="favicon.png">
+</head>
+<body>
+  <header>
+    <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
+      <img src="favicon.png" alt="LatteLab Logo">
+      <h1>LatteLab</h1>
+    </div>
+  </header>
+
+  <nav>
+    <a href="index.html">Home</a>
+    <a href="usage_guide.html">Usage Guide</a>
+    <a href="lbm_theory.html">LBM Theory</a>
+    <a href="lattelab_doc.html">Documentation</a>
+  </nav>
+
+  <main>
+    <section>
+      <h1>🍵 LatteLab</h1>
+      <p>
+        <strong>LatteLab</strong> is a GPU-accelerated, Rust-based framework for simulating fluid dynamics using the <strong>Lattice Boltzmann Method (LBM)</strong>. It is designed to be modular, readable, and easy to extend for research and academic applications in computational fluid dynamics (CFD).
+      </p>
+    </section>
+
+    <hr>
+
+    <section>
+      <h2>📖 Documentation</h2>
+      <ul>
+        <li><a href="usage_guide.html">▶️ Usage Guide</a></li>
+        <li><a href="lbm_theory.html">🧠 LBM Theory</a></li>
+        <li><a href="lattelab_doc.html">📚 LatteLab Documentation</a></li>
+      </ul>
+    </section>
+
+    <hr>
+
+    <section>
+      <h2>✨ Features</h2>
+      <ul>
+        <li>⚙️ Models: D2Q9, D3Q7, D3Q15, D3Q19, D3Q27</li>
+        <li>🧱 Solid / Fluid / Equilibrium boundaries</li>
+        <li>🚀 GPU acceleration (OpenCL)</li>
+        <li>📁 Output in CSV and VTK for plotting</li>
+      </ul>
+    </section>
+
+    <hr>
+
+    <section>
+      <h2>🧪 Examples</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Case</th>
+            <th>File</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Lid-Driven Cavity</td>
+            <td><code>liddriven_cavity.rs</code></td>
+          </tr>
+          <tr>
+            <td>Poiseuille Flow</td>
+            <td><code>poiseuille.rs</code></td>
+          </tr>
+          <tr>
+            <td>Taylor-Green Vortex</td>
+            <td><code>taylor_green_vortex.rs</code></td>
+          </tr>
+          <tr>
+            <td>Von Kármán Vortex Street</td>
+            <td><code>von_karman_vortex.rs</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+</body>
+</html>
