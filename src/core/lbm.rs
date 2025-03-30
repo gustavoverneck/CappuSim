@@ -33,8 +33,8 @@
 /// - `read_from_gpu`: Reads simulation data from GPU buffers to CPU memory.
 /// - `run`: Runs the LBM simulation for a specified number of time steps.
 /// - `calculate_vorticity`: Calculates the vorticity magnitude at a specific grid point.
-/// - `calculate_q_criteria`: Calculates the Q-criteria at a specific grid point.
-/// - `output_to`: Exports simulation data to a CSV file.
+/// - `calculate_q_criterion`: Calculates the Q-criterion at a specific grid point.
+/// - `output_to_csv`: Exports simulation data to a CSV file.
 /// - `set_output_interval`: Sets the interval for exporting simulation data.
 /// - `get_density`: Retrieves the density data from the GPU.
 /// - `get_velocity`: Retrieves the velocity data from the GPU.
@@ -55,6 +55,7 @@ use std::time::{Duration, Instant};
 use std::fs::File;
 use std::io::{self, Write, BufWriter};
 use std::path::Path;
+
 use crate::utils::velocity::Velocity;
 use crate::utils::terminal_utils;
 use crate::core::kernels::LBM_KERNEL;
@@ -499,7 +500,7 @@ impl LBM {
                     if (self.output_csv) {
                         // Export data to output csv file
                         let filename = format!("output/data_{:0width$}.csv", t, width = magnitude);
-                        if let Err(err) = self.output_to(&format!("{}", filename)) {
+                        if let Err(err) = self.output_to_csv(&format!("{}", filename)) {
                             terminal_utils::print_error(&format!("Error exporting data: {}", err));
                             return;
                         }
@@ -575,21 +576,19 @@ impl LBM {
         (vort_x, vort_y, vort_z)
     }
 
-    pub fn calculate_q_criteria(&self, x: usize, y: usize, z: usize) -> f32 {
-        let dx = 1.0;
-        let dy = 1.0;
-        let dz = 1.0;
+    pub fn calculate_q_criterion(&self, x: usize, y: usize, z: usize) -> f32 {
+        let dx = 1.0_f32;
+        let dy = 1.0_f32;
+        let dz = 1.0_f32;
     
-        let get = |x, y, z, d| -> f32 {
-            if x >= self.Nx || y >= self.Ny || z >= self.Nz {
-                0.0
-            } else {
-                let i = n_from_xyz(&x, &y, &z, &self.Nx, &self.Ny, &self.Nz);
-                self.u[i * 3 + d]
-            }
+        let get = |x: usize, y: usize, z: usize, d: usize| -> f32 {
+            let xi = x.clamp(0, self.Nx - 1);
+            let yi = y.clamp(0, self.Ny - 1);
+            let zi = z.clamp(0, self.Nz - 1);
+            let i = n_from_xyz(&xi, &yi, &zi, &self.Nx, &self.Ny, &self.Nz);
+            self.u[i * 3 + d]
         };
     
-        // Partial derivatives of velocity components
         let du_dx = (get(x + 1, y, z, 0) - get(x.saturating_sub(1), y, z, 0)) / (2.0 * dx);
         let du_dy = (get(x, y + 1, z, 0) - get(x, y.saturating_sub(1), z, 0)) / (2.0 * dy);
         let du_dz = (get(x, y, z + 1, 0) - get(x, y, z.saturating_sub(1), 0)) / (2.0 * dz);
@@ -602,27 +601,27 @@ impl LBM {
         let dw_dy = (get(x, y + 1, z, 2) - get(x, y.saturating_sub(1), z, 2)) / (2.0 * dy);
         let dw_dz = (get(x, y, z + 1, 2) - get(x, y, z.saturating_sub(1), 2)) / (2.0 * dz);
     
-        // Symmetric (strain rate) tensor S_ij
-        let s_xx = du_dx;
-        let s_yy = dv_dy;
-        let s_zz = dw_dz;
-        let s_xy = 0.5 * (du_dy + dv_dx);
-        let s_xz = 0.5 * (du_dz + dw_dx);
-        let s_yz = 0.5 * (dv_dz + dw_dy);
+        // Strain tensor S (Symmetric)
+        let s_xx: f32 = du_dx;
+        let s_yy: f32 = dv_dy;
+        let s_zz: f32 = dw_dz;
+        let s_xy: f32 = 0.5 * (du_dy + dv_dx);
+        let s_xz: f32 = 0.5 * (du_dz + dw_dx);
+        let s_yz: f32 = 0.5 * (dv_dz + dw_dy);
     
-        // Anti-symmetric (vorticity) tensor W_ij
-        let w_xy = 0.5 * (du_dy - dv_dx);
-        let w_xz = 0.5 * (du_dz - dw_dx);
-        let w_yz = 0.5 * (dv_dz - dw_dy);
+        // Vorticity tensor W (Antisymmetric)
+        let w_xy: f32 = 0.5 * (du_dy - dv_dx);
+        let w_xz: f32 = 0.5 * (du_dz - dw_dx);
+        let w_yz: f32 = 0.5 * (dv_dz - dw_dy);
     
-        // Frobenius norms
-        let s_norm = s_xx.powi(2) + s_yy.powi(2) + s_zz.powi(2) + 2.0 * (s_xy.powi(2) + s_xz.powi(2) + s_yz.powi(2));
+        let s_norm = s_xx.powi(2) + s_yy.powi(2) + s_zz.powi(2)
+                   + 2.0 * (s_xy.powi(2) + s_xz.powi(2) + s_yz.powi(2));
         let w_norm = 2.0 * (w_xy.powi(2) + w_xz.powi(2) + w_yz.powi(2));
     
         0.5 * (w_norm - s_norm)
     }
 
-    pub fn output_to(&self, path: &str) -> Result<(), Box<dyn Error>> {
+    pub fn output_to_csv(&self, path: &str) -> Result<(), Box<dyn Error>> {
         if self.found_errors {
             return Err("Errors were found in the input parameters. Cannot write output.".into());
         }
@@ -645,7 +644,7 @@ impl LBM {
             
             // Calculate vorticity
             let vorticity = self.calculate_vorticity(x, y, z);
-            let q_criteria = self.calculate_q_criteria(x, y, z);
+            let q_criteria = self.calculate_q_criterion(x, y, z);
             // Write the data to the file
             writeln!(
             writer,
@@ -708,84 +707,68 @@ impl LBM {
     }
 
     pub fn export_to_vtk(&self, filename: &str) -> std::io::Result<()> {
-        let mut file = File::create(filename)?;
+        let file = File::create(filename)?;
+        let mut writer = BufWriter::new(file);
+    
         let total_points = self.N;
-
-        writeln!(file, "# vtk DataFile Version 3.0")?;
-        writeln!(file, "LatteLab Simulation Output")?;
-        writeln!(file, "ASCII")?;
-        writeln!(file, "DATASET STRUCTURED_POINTS")?;
-        writeln!(file, "DIMENSIONS {} {} {}", self.Nx, self.Ny, self.Nz)?;
-        writeln!(file, "ORIGIN 0 0 0")?;
-        writeln!(file, "SPACING 1 1 1")?;
-        writeln!(file, "POINT_DATA {}", total_points)?;
-
-        // --- Density
-        writeln!(file, "SCALARS density float")?;
-        writeln!(file, "LOOKUP_TABLE default")?;
-        for i in 0..total_points {
-            writeln!(file, "{}", self.density[i])?;
+    
+        writeln!(writer, "# vtk DataFile Version 3.0")?;
+        writeln!(writer, "LatteLab Simulation Output")?;
+        writeln!(writer, "ASCII")?;
+        writeln!(writer, "DATASET STRUCTURED_POINTS")?;
+        writeln!(writer, "DIMENSIONS {} {} {}", self.Nx, self.Ny, self.Nz)?;
+        writeln!(writer, "ORIGIN 0 0 0")?;
+        writeln!(writer, "SPACING 1 1 1")?;
+        writeln!(writer, "POINT_DATA {}", total_points)?;
+    
+        // Cache Q-criterion and vorticity
+        let mut q_crit = vec![0.0; self.N];
+        let mut vorticity = vec![(0.0, 0.0, 0.0); self.N];
+        for z in 0..self.Nz {
+            for y in 0..self.Ny {
+                for x in 0..self.Nx {
+                    let i = n_from_xyz(&x, &y, &z, &self.Nx, &self.Ny, &self.Nz);
+                    q_crit[i] = self.calculate_q_criterion(x, y, z);
+                    vorticity[i] = self.calculate_vorticity_vector(x, y, z);
+                }
+            }
         }
-
-        // --- Velocity Magnitude
-        writeln!(file, "SCALARS velocity_magnitude float")?;
-        writeln!(file, "LOOKUP_TABLE default")?;
-        for i in 0..total_points {
-            let ux = self.u[i * 3 + 0];
-            let uy = self.u[i * 3 + 1];
-            let uz = self.u[i * 3 + 2];
-            let mag = (ux * ux + uy * uy + uz * uz).sqrt();
-            writeln!(file, "{}", mag)?;
+    
+        // Density
+        writeln!(writer, "SCALARS density float")?;
+        writeln!(writer, "LOOKUP_TABLE default")?;
+        for val in &self.density {
+            writeln!(writer, "{:.6}", val)?;
         }
-
-        // --- Velocity Vector
-        writeln!(file, "VECTORS velocity float")?;
+    
+        // Velocity
+        writeln!(writer, "VECTORS velocity float")?;
         for i in 0..total_points {
             writeln!(
-                file,
-                "{} {} {}",
-                self.u[i * 3 + 0],
+                writer,
+                "{:.6} {:.6} {:.6}",
+                self.u[i * 3],
                 self.u[i * 3 + 1],
                 self.u[i * 3 + 2]
             )?;
         }
-
-        // --- Q-Criterion
-        writeln!(file, "SCALARS q_criterion float")?;
-        writeln!(file, "LOOKUP_TABLE default")?;
-        for z in 0..self.Nz {
-            for y in 0..self.Ny {
-                for x in 0..self.Nx {
-                    writeln!(file, "{}", self.calculate_q_criteria(x, y, z))?;
-                }
-            }
+    
+        // Q-Criterion
+        writeln!(writer, "SCALARS q_criterion float")?;
+        writeln!(writer, "LOOKUP_TABLE default")?;
+        for val in &q_crit {
+            writeln!(writer, "{:.6}", val)?;
         }
-
-        // --- Vorticity Magnitude
-        writeln!(file, "SCALARS vorticity_magnitude float")?;
-        writeln!(file, "LOOKUP_TABLE default")?;
-        for z in 0..self.Nz {
-            for y in 0..self.Ny {
-                for x in 0..self.Nx {
-                    let (wx, wy, wz) = self.calculate_vorticity_vector(x, y, z);
-                    writeln!(file, "{}", (wx * wx + wy * wy + wz * wz).sqrt())?;
-                }
-            }
+    
+        // Vorticity
+        writeln!(writer, "VECTORS vorticity float")?;
+        for (vx, vy, vz) in &vorticity {
+            writeln!(writer, "{:.6} {:.6} {:.6}", vx, vy, vz)?;
         }
-
-        // --- Vorticity Vector
-        writeln!(file, "VECTORS vorticity float")?;
-        for z in 0..self.Nz {
-            for y in 0..self.Ny {
-                for x in 0..self.Nx {
-                    let (wx, wy, wz) = self.calculate_vorticity_vector(x, y, z);
-                    writeln!(file, "{} {} {}", wx, wy, wz)?;
-                }
-            }
-        }
-
+    
         Ok(())
     }
+
 }
 
 pub fn n_from_xyz(x: &usize, y: &usize, z: &usize, Nx: &usize, Ny: &usize, Nz: &usize) -> usize {
