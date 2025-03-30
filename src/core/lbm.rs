@@ -1,3 +1,5 @@
+#![allow(non_snake_case)] // Allow non-snake_case naming convention
+#![allow(clippy::upper_case_acronyms)] // Allow uppercase acronyms
 /// The `LBM` struct represents a Lattice Boltzmann Method (LBM) simulation.
 /// It encapsulates the parameters, state, and operations required to perform
 /// fluid dynamics simulations using the LBM approach.
@@ -50,7 +52,7 @@
 /// 1. Create an instance of `LBM` using the `new` method.
 /// 2. Set initial conditions using `set_conditions`.
 /// 3. Run the simulation using the `run` method.
-/// 4. Optionally, export results to CSV or VTK using `output_to_csv` or `export_to_vtk`. 
+/// 4. Optionally, export results to CSV or VTK using `output_to_csv` or `export_to_vtk`.
 ///    Use `.set_output_interval(interval)` to specify the interval for exporting data.
 ///
 /// # Example
@@ -63,11 +65,8 @@
 /// lbm.set_output_interval(10);
 /// lbm.run(1000);
 /// ```
-#![allow(non_snake_case)] // Allow non-snake_case naming convention
-
-
 use ocl::{
-    Buffer, Context, Device, Kernel, Platform, ProQue, Program, Queue, flags::MEM_READ_WRITE,
+    flags::MEM_READ_WRITE, Buffer, Context, Device, Kernel, Platform, ProQue, Program, Queue,
 };
 use std::error::Error;
 use std::fs::File;
@@ -204,19 +203,15 @@ impl LBM {
         self.context = Some(
             Context::builder()
                 .platform(self.platform.unwrap())
-                .devices(self.device.unwrap().clone())
+                .devices(self.device.unwrap())
                 .build()
                 .expect("Failed to build context."),
         );
 
         // Create a command queue for the device
         self.queue = Some(
-            Queue::new(
-                self.context.as_ref().unwrap(),
-                self.device.unwrap().clone(),
-                None,
-            )
-            .expect("Failed to create command queue."),
+            Queue::new(self.context.as_ref().unwrap(), self.device.unwrap(), None)
+                .expect("Failed to create command queue."),
         );
 
         // Write defines on kernel
@@ -332,7 +327,7 @@ impl LBM {
                 .arg(self.density_buffer.as_ref().unwrap())
                 .arg(self.flags_buffer.as_ref().unwrap())
                 .arg(self.u_buffer.as_ref().unwrap())
-                .arg(&self.omega)
+                .arg(self.omega)
                 .build()
                 .expect("Failed to build OpenCL 'collision_kernel'."),
         );
@@ -467,7 +462,7 @@ impl LBM {
             f(self, x, y, z, n);
         }
         self.u = self.velocity_to_u(); // Transform 3D array to Flattened array
-        self.velocity = vec![Velocity::zero(); 0];
+        self.velocity = vec![];
     }
 
     // Read data from GPU to CPU
@@ -587,35 +582,27 @@ impl LBM {
             }
 
             // Output data
-            if self.output_interval != 0 {
-                if t % self.output_interval == 0 {
-                    // Read data from GPU to CPU
-                    if let Err(err) = self.read_from_gpu() {
-                        terminal_utils::print_error(&format!(
-                            "Error reading data from GPU: {}",
-                            err
-                        ));
+            if (self.output_interval != 0) && (t % self.output_interval == 0) {
+                // Read data from GPU to CPU
+                if let Err(err) = self.read_from_gpu() {
+                    terminal_utils::print_error(&format!("Error reading data from GPU: {}", err));
+                    return;
+                }
+                let magnitude = self.time_steps.to_string().len();
+                if (self.output_csv) {
+                    // Export data to output csv file
+                    let filename = format!("output/data_{:0width$}.csv", t, width = magnitude);
+                    if let Err(err) = self.output_to_csv(&filename.to_string()) {
+                        terminal_utils::print_error(&format!("Error exporting data: {}", err));
                         return;
                     }
-                    let magnitude = self.time_steps.to_string().len();
-                    if (self.output_csv) {
-                        // Export data to output csv file
-                        let filename = format!("output/data_{:0width$}.csv", t, width = magnitude);
-                        if let Err(err) = self.output_to_csv(&format!("{}", filename)) {
-                            terminal_utils::print_error(&format!("Error exporting data: {}", err));
-                            return;
-                        }
-                    }
-                    if (self.output_vtk) {
-                        // Export data to VTK file
-                        let filename = format!("output/data_{:0width$}.vtk", t, width = magnitude);
-                        if let Err(err) = self.export_to_vtk(&filename) {
-                            terminal_utils::print_error(&format!(
-                                "Error exporting VTK data: {}",
-                                err
-                            ));
-                            return;
-                        }
+                }
+                if (self.output_vtk) {
+                    // Export data to VTK file
+                    let filename = format!("output/data_{:0width$}.vtk", t, width = magnitude);
+                    if let Err(err) = self.export_to_vtk(&filename) {
+                        terminal_utils::print_error(&format!("Error exporting VTK data: {}", err));
+                        return;
                     }
                 }
             }

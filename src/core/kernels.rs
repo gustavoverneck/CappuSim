@@ -60,7 +60,6 @@
 /// # Usage
 /// These kernels are written in OpenCL C and are intended to be used with an OpenCL runtime.
 /// They are embedded as a string in the Rust code and can be compiled and executed on compatible devices.
-
 pub const LBM_KERNEL: &str = r#"
 // Velocity vectors (D2Q9, D3Q7, D3Q15, D3Q19, D3Q27)
 constant int c[Q][3] = {
