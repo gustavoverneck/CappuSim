@@ -1,19 +1,19 @@
 
-# LatteLab
+# CappuSim
 
 ![Rust](https://img.shields.io/badge/rust-%23000000.svg?style=for-the-badge&logo=rust&logoColor=white) ![License: GNU v3](https://img.shields.io/badge/License-GNU%20v3-blue.svg)  
 
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/4459088f-68cc-4b72-b37a-efd6ee2d50c5" alt="fundo_lattelab" />
+  ![CappuSim banner](https://github.com/user-attachments/assets/0838bf3d-389d-4d50-bfc2-e5c0578ac75b)
 </p> 
 
 ## Description  
-**LatteLab** is a Rust software for computational fluid dynamics (CFD) simulations based on the **Lattice Boltzmann Method (LBM)**. This project is part of my Master's Degree in Physics and aims to provide an efficient and flexible tool for LBM simulations, leveraging [opencl](https://www.khronos.org/opencl/) for GPU acceleration.  
+**CappuSim** is a Rust software for computational fluid dynamics (CFD) simulations based on the **Lattice Boltzmann Method (LBM)**. This project is part of my Master's Degree in Physics and aims to provide an efficient and flexible tool for LBM simulations, leveraging [opencl](https://www.khronos.org/opencl/) for GPU acceleration.  
 
 The library is **Open Source**, and contributions are highly encouraged. Whether you're an academic researcher or just curious about fluid dynamics, you're welcome to contribute!  
 
 ## Current State and road map
-**LatteLab** is currently in **alpha** and appears **functional**, but no yet validated. A validated **beta version** will be available soon. Stay tuned!
+**CappuSim** is currently in **alpha** and appears **functional**, but no yet validated. A validated **beta version** will be available soon. Stay tuned!
 
 The possibilities for the future include:
 - Temperature
@@ -26,7 +26,7 @@ The possibilities for the future include:
 - Plasma extension
 
 ## Installation  
-To use LatteLab, you will need to install specific versions of **cargo** and **rust**: 
+To use CappuSim, you will need to install specific versions of **cargo** and **rust**: 
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
@@ -34,8 +34,8 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 To run it, clone the directory and execute it using cargo:
 
 ```bash
-git clone https://github.com/gustavoverneck/LatteLab
-cd LatteLab
+git clone https://github.com/gustavoverneck/CappuSim
+cd CappuSim
 cargo build --release
 cargo run
 ```
@@ -43,7 +43,7 @@ cargo run
 A package installation will be available in future releases.
 
 ## Documentation
-The official documentation is under development and can be accessed in [Documentation](https://gustavoverneck.github.io/LatteLab/).  
+The official documentation is under development and can be accessed in [Documentation](https://gustavoverneck.github.io/CappuSim/).  
 
 ## License  
 This project is licensed under the **GNU General Public License v3.0**. For more details, see the [LICENSE](LICENSE) file.  
