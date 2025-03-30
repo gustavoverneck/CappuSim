@@ -1,50 +1,71 @@
-#![allow(non_snake_case)] // Allow non-snake_case naming convention
-
 /// The `LBM` struct represents a Lattice Boltzmann Method (LBM) simulation.
-/// It encapsulates the grid dimensions, physical parameters, and OpenCL resources
-/// required for the simulation.
+/// It encapsulates the parameters, state, and operations required to perform
+/// fluid dynamics simulations using the LBM approach.
 ///
 /// # Fields
-/// - `Nx`, `Ny`, `Nz`: Dimensions of the simulation grid in the x, y, and z directions.
+/// - `Nx`, `Ny`, `Nz`: Dimensions of the simulation grid.
 /// - `N`: Total number of grid points (Nx * Ny * Nz).
-/// - `model`: The LBM model used (e.g., "D2Q9", "D3Q19").
-/// - `D`: Number of spatial dimensions (2 or 3).
-/// - `Q`: Number of discrete velocity directions in the LBM model.
-/// - `viscosity`: Kinematic viscosity of the fluid.
+/// - `model`: The LBM model used ("D2Q9", "D3Q7", "D3Q15", "D3Q19", "D3Q27").
+/// - `D`: Dimensionality of the model (2D or 3D).
+/// - `Q`: Number of discrete velocity directions in the model.
+/// - `viscosity`: Fluid viscosity (in lattice units).
 /// - `omega`: Relaxation parameter derived from viscosity.
-/// - `time_steps`: Number of time steps to simulate.
-/// - `f`, `f_new`: Distribution functions for the LBM simulation.
+/// - `time_steps`: Number of simulation time steps.
+/// - `f`, `f_new`: Distribution functions for the current and next time steps.
 /// - `density`: Fluid density at each grid point.
 /// - `u`: Flattened velocity vector (3 components per grid point).
 /// - `velocity`: Velocity vector as a `Velocity` struct for each grid point.
-/// - `flags`: Flags indicating the type of each grid point (fluid, solid, eq).
-/// - `f_buffer`, `f_new_buffer`, `density_buffer`, `u_buffer`, `flags_buffer`: OpenCL buffers for simulation data.
-/// - `platform`, `device`, `context`, `queue`, `program`: OpenCL resources for GPU computation.
-/// - `streaming_kernel`, `collision_kernel`, `swap_kernel`, `equilibrium_kernel`: OpenCL kernels for LBM operations.
+/// - `flags`: Flags indicating the type of each grid point (fluid, solid or eq).
+/// - OpenCL-related fields (`f_buffer`, `density_buffer`, etc.): Buffers and kernels for GPU computation.
 /// - `found_errors`: Indicates if errors were found in the input parameters.
-/// - `output_interval`: Interval for exporting simulation data to files.
+/// - `output_interval`: Interval for exporting simulation data.
+/// - `output_csv`, `output_vtk`: Flags for enabling CSV and VTK output.
 ///
 /// # Methods
-/// - `new`: Creates a new `LBM` instance with the specified grid dimensions, model, and viscosity.
-/// - `initialize_ocl`: Initializes OpenCL resources and builds kernels for the simulation.
-/// - `calculate_vram_usage`: Calculates the total VRAM usage of the simulation.
+/// - `new`: Constructs a new `LBM` instance with the given dimensions, model, and viscosity.
+/// - `initialize_ocl`: Initializes OpenCL platform, device, context, and kernels.
+/// - `calculate_vram_usage`: Calculates the VRAM usage of the simulation.
 /// - `check_errors_in_input`: Validates the input parameters for the simulation.
-/// - `set_conditions`: Sets initial conditions for the simulation using a user-defined function.
-/// - `read_from_gpu`: Reads simulation data from GPU buffers to CPU memory.
-/// - `run`: Runs the LBM simulation for a specified number of time steps.
-/// - `calculate_vorticity`: Calculates the vorticity magnitude at a specific grid point.
-/// - `calculate_q_criterion`: Calculates the Q-criterion at a specific grid point.
+/// - `set_conditions`: Sets initial conditions using a user-defined function.
+/// - `read_from_gpu`: Reads simulation data from GPU buffers to CPU.
+/// - `run`: Runs the simulation for a specified number of time steps.
+/// - `set_output_csv`: Enables or disables CSV output.
+/// - `set_output_vtk`: Enables or disables VTK output.
+/// - `calculate_vorticity`: Computes the magnitude of vorticity at a grid point.
+/// - `calculate_vorticity_vector`: Computes the vorticity vector at a grid point.
+/// - `calculate_q_criterion`: Computes the Q-criterion for vortex identification.
 /// - `output_to_csv`: Exports simulation data to a CSV file.
 /// - `set_output_interval`: Sets the interval for exporting simulation data.
 /// - `get_density`: Retrieves the density data from the GPU.
 /// - `get_velocity`: Retrieves the velocity data from the GPU.
-/// - `velocity_to_u`: Converts the `velocity` vector to a flattened `u` vector.
-/// - `u_to_velocity`: Converts a flattened `u` vector to the `velocity` vector.
+/// - `velocity_to_u`: Converts the `velocity` vector to a flattened `u` array.
+/// - `u_to_velocity`: Converts a flattened `u` array to the `velocity` vector.
+/// - `export_to_vtk`: Exports simulation data to a VTK file.
 ///
 /// # Utility Functions
-/// - `n_from_xyz`: Converts 3D grid coordinates (x, y, z) to a linear index.
-/// - `xyz_from_n`: Converts a linear index to 3D grid coordinates (x, y, z).
-// src/core/lbm.rs
+/// - `n_from_xyz`: Converts 3D coordinates (x, y, z) to a linear index.
+/// - `xyz_from_n`: Converts a linear index to 3D coordinates (x, y, z).
+///
+/// # Usage
+/// 1. Create an instance of `LBM` using the `new` method.
+/// 2. Set initial conditions using `set_conditions`.
+/// 3. Run the simulation using the `run` method.
+/// 4. Optionally, export results to CSV or VTK using `output_to_csv` or `export_to_vtk`. 
+///    Use `.set_output_interval(interval)` to specify the interval for exporting data.
+///
+/// # Example
+/// ```rust
+/// let mut lbm = LBM::new(100, 100, 1, "D2Q9".to_string(), 0.01);
+/// lbm.set_conditions(|lbm, x, y, z, n| {
+///     // Define initial conditions here
+/// });
+/// lbm.set_output_csv(true);
+/// lbm.set_output_interval(10);
+/// lbm.run(1000);
+/// ```
+#![allow(non_snake_case)] // Allow non-snake_case naming convention
+
+
 use ocl::{
     Buffer, Context, Device, Kernel, Platform, ProQue, Program, Queue, flags::MEM_READ_WRITE,
 };
