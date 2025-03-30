@@ -60,6 +60,7 @@ use std::path::Path;
 //     //lbm.export_to_vtk("vtk_output/taylor_green_final.vtk").unwrap();
 // }
 
+// ==============================================================================
 
 // 2D Poiseuille Flow example
 // fn main() {
@@ -197,7 +198,7 @@ use std::path::Path;
 
 // 2D Splash example
 // fn main() {
-// --- Simulation parameters ---
+// //--- Simulation parameters ---
 //     let nx = 256;
 //     let ny = 128;
 //     let nz = 1;
@@ -240,4 +241,73 @@ use std::path::Path;
 
 //     // --- Run simulation ---
 //     lbm.run(steps);
+// }
+
+// =============================================================================
+
+// 3D Poiseuille Example
+// fn main() {
+//     let nx = 64;
+//     let ny = 32;
+//     let nz = 64;
+
+//     let viscosity = 0.01;
+//     let mut lbm = LBM::new(nx, ny, nz, "D3Q19".to_string(), viscosity);
+
+//     let fz = 1e-6; // Small body force in z-direction
+
+//     lbm.set_conditions(|lbm, x, y, z, n| {
+//         if y == 0 || y == ny - 1 {
+//             lbm.flags[n] = FLAG_SOLID; // No-slip top and bottom walls
+//         } else {
+//             lbm.flags[n] = FLAG_FLUID;
+
+//             // Approximate initial velocity profile (optional)
+//             let y_f = y as f32;
+//             let h = ny as f32;
+//             let uz = (fz / (2.0 * viscosity)) * y_f * (h - y_f);
+
+//             lbm.density[n] = 1.0;
+//             lbm.velocity[n].x = 0.0;
+//             lbm.velocity[n].y = 0.0;
+//             lbm.velocity[n].z = uz;
+//         }
+//     });
+//     lbm.set_output_interval(20);
+//     lbm.set_output_vtk(true);
+//     lbm.run(100);
+// }
+
+// =============================================================================
+// 2D Kelvin-Helmholtz Instability
+// fn main() {
+//     let nx = 512;
+//     let ny = 256;
+//     let u0 = 0.04; // shear velocity
+//     let amplitude = 0.01; // sinusoidal perturbation
+//     let cy = ny / 2;
+//     let thickness = 20.0; // central transition band
+
+//     let mut lbm = LBM::new(nx, ny, 1, "D2Q9".to_string(), 0.005);
+
+//     lbm.set_conditions(|lbm, x, y, _z, n| {
+//         let y_f = y as f32;
+//         let dy = (y_f - cy as f32) / thickness;
+//         let shear = 0.5 * (1.0 + (-dy).tanh()); // smooth profile (hyperbolic tangent)
+
+//         let perturb = amplitude * (2.0 * std::f32::consts::PI * x as f32 / nx as f32).sin();
+
+//         lbm.flags[n] = if y == 0 || y == ny - 1 {
+//             FLAG_SOLID
+//         } else {
+//             FLAG_FLUID
+//         };
+
+//         lbm.velocity[n].x = u0 * (2.0 * shear - 1.0); // -u0 at the bottom, +u0 at the top
+//         lbm.velocity[n].y = perturb;
+//         lbm.density[n] = 1.0;
+//     });
+//     lbm.set_output_vtk(true);
+//     lbm.set_output_interval(200);
+//     lbm.run(20000);
 // }
