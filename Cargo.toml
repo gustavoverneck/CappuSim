@@ -1,16 +1,18 @@
 [package]
 name = "lattelab"
-version = "0.1.0"
-edition = "2024"
+version = "0.1.1"
+edition = "2021"  # Currently the latest stable edition
 
-description = "A CFD solver based on LBM and powered by opencl."   # A description of our crate for `crates.io`
-keywords = ["CFD", "LBM"]   # Keywords for searches on `crates.io`
-#documentation = "" # URL to the crate's documentation
-#homepage = ""   # URL to the crate's homepage
-repository = "" # URL of the crate's source repository
-authors = ["Gustavo A. Verneck"]  # The authors of the crate
-#license = ""    # The crate's license
-#rust-version = ""  # The minimum supported Rust version
+description = "A Rust CFD solver based on LBM and powered by OpenCL."
+keywords = ["CFD", "LBM", "OpenCL", "fluid-dynamics", "simulation"]
+categories = ["science", "simulation", "mathematics"]
+documentation = "https://docs.rs/lattelab"
+homepage = "https://github.com/gustavoaverneck/LatteLab"
+repository = "https://github.com/gustavoaverneck/LatteLab"
+authors = ["Gustavo A. Verneck <gustavoverneck@gmail.com>"]
+license = "GPL-3.0-or-later"  # "GNUv3" isn't standard notation, use correct SPDX identifier
+readme = "README.md"
+rust-version = "1.75"  # Adjust this if you require a specific Rust version
 
 [dependencies]
 ocl = "0.19"
