@@ -36,7 +36,7 @@ To run it, clone the directory and execute it using cargo:
 git clone https://github.com/gustavoverneck/CappuSim
 cd CappuSim
 cargo build --release
-cargo run
+cargo run --release
 ```
 
 A package installation will be available in future releases.
