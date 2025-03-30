@@ -1,11 +1,11 @@
 
 # CappuSim
-
+https://github.com/gustavoverneck/CappuSim/blob/main/README.md
 ![Rust](https://img.shields.io/badge/rust-%23000000.svg?style=for-the-badge&logo=rust&logoColor=white) ![License: GNU v3](https://img.shields.io/badge/License-GNU%20v3-blue.svg)  
 
 <p align="center">
-  ![CappuSim banner](https://github.com/user-attachments/assets/0838bf3d-389d-4d50-bfc2-e5c0578ac75b)
-</p> 
+  <img src="https://github.com/user-attachments/assets/fc920e2a-e6f2-48cb-a463-5ead9f9dd9b1" alt="CappuSim banner"/>
+</p>
 
 ## Description  
 **CappuSim** is a Rust software for computational fluid dynamics (CFD) simulations based on the **Lattice Boltzmann Method (LBM)**. This project is part of my Master's Degree in Physics and aims to provide an efficient and flexible tool for LBM simulations, leveraging [opencl](https://www.khronos.org/opencl/) for GPU acceleration.  
