@@ -487,7 +487,7 @@ impl LBM {
     }
 
     pub fn run(&mut self, time_steps: usize) {
-        // Print LatteLab welcome message
+        // Print welcome message
         terminal_utils::print_welcome_message();
         self.time_steps = time_steps;
         println!("{}", "-".repeat(72));
@@ -812,7 +812,7 @@ impl LBM {
         let total_points = self.N;
 
         writeln!(writer, "# vtk DataFile Version 3.0")?;
-        writeln!(writer, "LatteLab Simulation Output")?;
+        writeln!(writer, "CappuSim Simulation Output")?;
         writeln!(writer, "ASCII")?;
         writeln!(writer, "DATASET STRUCTURED_POINTS")?;
         writeln!(writer, "DIMENSIONS {} {} {}", self.Nx, self.Ny, self.Nz)?;

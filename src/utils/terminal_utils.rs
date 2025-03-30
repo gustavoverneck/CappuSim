@@ -27,18 +27,24 @@ pub fn print_error(message: &str) {
     println!("{}: {}", "[ERROR]".red().bold(), message);
 }
 
-// Print LatteLab welcome message
+// Print welcome message
 pub fn print_welcome_message() {
     println!("{}", "-".repeat(72));
     println!(
         "{}",
         r#"
-  _           _   _       _           _     
- | |         | | | |     | |         | |    
- | |     __ _| |_| |_ ___| |     __ _| |__  
- | |    / _` | __| __/ _ \ |    / _` | '_ \ 
- | |___| (_| | |_| ||  __/ |___| (_| | |_) |
- |______\__,_|\__|\__\___|______\__,_|_.__/ 
+         _____                                  
+        / ____|                                 
+       | |     __ _ _ __  _ __  _   _           
+       | |    / _` | '_ \| '_ \| | | |          
+       | |___| (_| | |_) | |_) | |_| |          
+        \_____\__,_| .__/| .__/_\__,_|          
+                   | |   | | / ____(_)          
+                   |_|   |_|| (___  _ _ __ ___  
+                             \___ \| | '_ ` _ \ 
+                             ____) | | | | | | |
+                            |_____/|_|_| |_| |_|
+                                                
                                             
                                                Gustavo A. Verneck, 2025.
 "#
@@ -65,5 +71,5 @@ pub fn print_metrics(time_steps: u64, elapsed_time: f64, mlups: f64) {
 }
 
 pub fn print_name() {
-    println!("\n{}", "LatteLab".bold().blue());
+    println!("\n{}", "CappuSim".bold().blue());
 }
