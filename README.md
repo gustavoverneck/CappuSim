@@ -1,6 +1,5 @@
 
 # CappuSim
-https://github.com/gustavoverneck/CappuSim/blob/main/README.md
 ![Rust](https://img.shields.io/badge/rust-%23000000.svg?style=for-the-badge&logo=rust&logoColor=white) ![License: GNU v3](https://img.shields.io/badge/License-GNU%20v3-blue.svg)  
 
 <p align="center">
