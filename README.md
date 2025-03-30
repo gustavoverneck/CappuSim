@@ -18,6 +18,7 @@ The library is **Open Source**, and contributions are highly encouraged. Whether
 The possibilities for the future include:
 - Temperature
 - Forces
+- Improve kernels handling
 - GUI
 - Python interface
 - Multiphase fluid
