@@ -18,3 +18,11 @@ rust-version = "1.75"  # Adjust this if you require a specific Rust version
 ocl = "0.19"
 colored = "2.1.0"
 indicatif = "0.17"
+
+[profile.release]
+opt-level = 3          # Maximum optimization (speed over size)
+lto = "fat"            # Link Time Optimization
+codegen-units = 1      # Better optimization across crates (slower compile)
+debug = false          # Remove debug symbols unless profiling
+panic = "abort"        # Smaller binary and faster panic handling
+strip = true           # Remove symbol table and debug info (size)
