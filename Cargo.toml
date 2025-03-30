@@ -1,6 +1,6 @@
 [package]
 name = "lattelab"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"  # Currently the latest stable edition
 
 description = "A Rust CFD solver based on LBM and powered by OpenCL."
