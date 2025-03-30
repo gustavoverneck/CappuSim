@@ -65,6 +65,10 @@ impl Velocity {
     /// assert_eq!(zero_velocity.z, 0.0);
     /// ```
     pub fn zero() -> Self {
-        Velocity { x: 0.0, y: 0.0, z: 0.0 }
+        Velocity {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        }
     }
 }

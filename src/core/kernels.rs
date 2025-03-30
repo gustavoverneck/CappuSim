@@ -1,5 +1,5 @@
 /// This module contains OpenCL kernels for implementing the Lattice Boltzmann Method (LBM).
-/// The kernels include functionality for streaming, collision, equilibrium computation, 
+/// The kernels include functionality for streaming, collision, equilibrium computation,
 /// and copying data between distribution function arrays.
 ///
 /// # Constants
@@ -58,7 +58,7 @@
 /// - The equilibrium kernel computes the equilibrium distribution function directly for given density and velocity values.
 ///
 /// # Usage
-/// These kernels are written in OpenCL C and are intended to be used with an OpenCL runtime. 
+/// These kernels are written in OpenCL C and are intended to be used with an OpenCL runtime.
 /// They are embedded as a string in the Rust code and can be compiled and executed on compatible devices.
 
 pub const LBM_KERNEL: &str = r#"

@@ -1,4 +1,4 @@
-#![allow(non_snake_case)]   // Allow non-snake_case naming convention
+#![allow(non_snake_case)] // Allow non-snake_case naming convention
 
 /// The `LBM` struct represents a Lattice Boltzmann Method (LBM) simulation.
 /// It encapsulates the grid dimensions, physical parameters, and OpenCL resources
@@ -45,20 +45,21 @@
 /// - `n_from_xyz`: Converts 3D grid coordinates (x, y, z) to a linear index.
 /// - `xyz_from_n`: Converts a linear index to 3D grid coordinates (x, y, z).
 // src/core/lbm.rs
-
-use ocl::{Platform, Device, Context, Queue, Program, Buffer, Kernel, ProQue};
-use ocl::flags::MEM_READ_WRITE;
+use ocl::{
+    Buffer, Context, Device, Kernel, Platform, ProQue, Program, Queue, flags::MEM_READ_WRITE,
+};
 use std::error::Error;
-use indicatif::{ProgressBar, ProgressStyle};
+use std::fs::File;
+use std::io::{self, BufWriter, Write};
+use std::path::Path;
 use std::thread;
 use std::time::{Duration, Instant};
-use std::fs::File;
-use std::io::{self, Write, BufWriter};
-use std::path::Path;
 
-use crate::utils::velocity::Velocity;
-use crate::utils::terminal_utils;
+use indicatif::{ProgressBar, ProgressStyle};
+
 use crate::core::kernels::LBM_KERNEL;
+use crate::utils::terminal_utils;
+use crate::utils::velocity::Velocity;
 
 // LBM FLAGS
 pub const FLAG_FLUID: i32 = 0;
@@ -135,10 +136,10 @@ impl LBM {
             time_steps: 0,
             f: vec![0.0; size * Q],
             f_new: vec![0.0; size * Q],
-            density: vec![1.0; size],   // Initialize density to 1.0
+            density: vec![1.0; size], // Initialize density to 1.0
             u: vec![0.0; size * 3], // Initialize velocity to zero (size * 3 for 3 components per grid point)
             velocity: vec![Velocity::zero(); size], // Initialize input velocity to zero
-            flags: vec![0; size],       // Initialize flags to 0 (fluid)
+            flags: vec![0; size],   // Initialize flags to 0 (fluid)
             f_buffer: None,
             f_new_buffer: None,
             density_buffer: None,
@@ -162,31 +163,44 @@ impl LBM {
 
     fn initialize_ocl(&mut self) -> Result<(), Box<dyn Error>> {
         // Select default platform and device
-        self.platform = Some(Platform::list()
-            .into_iter()
-            .next()
-            .ok_or("Platform not found")?);
+        self.platform = Some(
+            Platform::list()
+                .into_iter()
+                .next()
+                .ok_or("Platform not found")?,
+        );
         println!("Platform: {}", self.platform.as_ref().unwrap().name()?);
-        
-        self.device = Some(Device::list_all(self.platform.as_ref().unwrap())?
-            .into_iter()
-            .next()
-            .ok_or("Device not found")?);
+
+        self.device = Some(
+            Device::list_all(self.platform.as_ref().unwrap())?
+                .into_iter()
+                .next()
+                .ok_or("Device not found")?,
+        );
         println!("Device: {}", self.device.as_ref().unwrap().name()?);
 
         // Create a context for the selected device
-        self.context = Some(Context::builder()
-            .platform(self.platform.unwrap())
-            .devices(self.device.unwrap().clone())
-            .build()
-            .expect("Failed to build context."));
-        
+        self.context = Some(
+            Context::builder()
+                .platform(self.platform.unwrap())
+                .devices(self.device.unwrap().clone())
+                .build()
+                .expect("Failed to build context."),
+        );
+
         // Create a command queue for the device
-        self.queue = Some(Queue::new(self.context.as_ref().unwrap(), self.device.unwrap().clone(), None)
-            .expect("Failed to create command queue."));
+        self.queue = Some(
+            Queue::new(
+                self.context.as_ref().unwrap(),
+                self.device.unwrap().clone(),
+                None,
+            )
+            .expect("Failed to create command queue."),
+        );
 
         // Write defines on kernel
-        let kernel_source = format!(r#"
+        let kernel_source = format!(
+            r#"
         #define NX {}
         #define NY {}
         #define NZ {}
@@ -197,111 +211,142 @@ impl LBM {
         #define FLAG_SOLID 1
         #define FLAG_EQ 2
         {}
-        "#, self.Nx, self.Ny, self.Nz, self.N, self.Q, self.model.as_str(), LBM_KERNEL);
+        "#,
+            self.Nx,
+            self.Ny,
+            self.Nz,
+            self.N,
+            self.Q,
+            self.model.as_str(),
+            LBM_KERNEL
+        );
         //println!("{}", kernel_source); //Debug: print final kernel
 
         // Define OpenCL program
-        self.program = Some(Program::builder()
-            .src(kernel_source)
-            .devices(self.device.as_ref().unwrap())
-            .build(self.context.as_ref().unwrap())
-            .expect("Failed to build program."));
+        self.program = Some(
+            Program::builder()
+                .src(kernel_source)
+                .devices(self.device.as_ref().unwrap())
+                .build(self.context.as_ref().unwrap())
+                .expect("Failed to build program."),
+        );
 
         // Create f buffer
-        self.f_buffer = Some(Buffer::<f32>::builder()
-            .queue(self.queue.as_ref().unwrap().clone())
-            .flags(MEM_READ_WRITE)
-            .len(self.N * self.Q) // Ensures correct buffer size for 'f'
-            .copy_host_slice(&self.f)
-            .build()
-            .expect("Failed to build 'f' buffer."));
+        self.f_buffer = Some(
+            Buffer::<f32>::builder()
+                .queue(self.queue.as_ref().unwrap().clone())
+                .flags(MEM_READ_WRITE)
+                .len(self.N * self.Q) // Ensures correct buffer size for 'f'
+                .copy_host_slice(&self.f)
+                .build()
+                .expect("Failed to build 'f' buffer."),
+        );
 
         // Create f_new buffer
-        self.f_new_buffer = Some(Buffer::<f32>::builder()
-        .queue(self.queue.as_ref().unwrap().clone())
-        .flags(MEM_READ_WRITE)
-        .len(self.N * self.Q) // Ensures correct buffer size for 'f_new'
-        .copy_host_slice(&self.f_new)
-        .build()
-        .expect("Failed to build 'f_new' buffer."));
+        self.f_new_buffer = Some(
+            Buffer::<f32>::builder()
+                .queue(self.queue.as_ref().unwrap().clone())
+                .flags(MEM_READ_WRITE)
+                .len(self.N * self.Q) // Ensures correct buffer size for 'f_new'
+                .copy_host_slice(&self.f_new)
+                .build()
+                .expect("Failed to build 'f_new' buffer."),
+        );
 
         // Create density buffer
-        self.density_buffer = Some(Buffer::<f32>::builder()
-        .queue(self.queue.as_ref().unwrap().clone())
-        .flags(MEM_READ_WRITE)
-        .len(self.N) // Correct size for 'density'
-        .copy_host_slice(&self.density)
-        .build()
-        .expect("Failed to build 'density' buffer."));
-        
+        self.density_buffer = Some(
+            Buffer::<f32>::builder()
+                .queue(self.queue.as_ref().unwrap().clone())
+                .flags(MEM_READ_WRITE)
+                .len(self.N) // Correct size for 'density'
+                .copy_host_slice(&self.density)
+                .build()
+                .expect("Failed to build 'density' buffer."),
+        );
+
         // Create velocity buffer
-        self.u_buffer = Some(Buffer::<f32>::builder()
-        .queue(self.queue.as_ref().unwrap().clone())
-        .flags(MEM_READ_WRITE)
-        .len(self.N * 3)
-        .copy_host_slice(&self.u)
-        .build()
-        .expect("Failed to build 'velocity' buffer."));
+        self.u_buffer = Some(
+            Buffer::<f32>::builder()
+                .queue(self.queue.as_ref().unwrap().clone())
+                .flags(MEM_READ_WRITE)
+                .len(self.N * 3)
+                .copy_host_slice(&self.u)
+                .build()
+                .expect("Failed to build 'velocity' buffer."),
+        );
 
         // Create kernels and set its arguments
-        self.flags_buffer = Some(Buffer::<i32>::builder()
-        .queue(self.queue.as_ref().unwrap().clone())
-        .flags(MEM_READ_WRITE)
-        .len(self.N) // Corrected size for 'flags'
-        .copy_host_slice(&self.flags)
-        .build()
-        .expect("Failed to build 'flags' buffer."));
+        self.flags_buffer = Some(
+            Buffer::<i32>::builder()
+                .queue(self.queue.as_ref().unwrap().clone())
+                .flags(MEM_READ_WRITE)
+                .len(self.N) // Corrected size for 'flags'
+                .copy_host_slice(&self.flags)
+                .build()
+                .expect("Failed to build 'flags' buffer."),
+        );
 
         // Create kernels and set its arguments
-        self.streaming_kernel = Some(Kernel::builder()
-            .program(self.program.as_ref().unwrap())
-            .name("streaming_kernel")
-            .queue(self.queue.as_ref().unwrap().clone())
-            .global_work_size(self.N)
-            .arg(self.f_buffer.as_ref().unwrap())
-            .arg(self.f_new_buffer.as_ref().unwrap())
-            .arg(self.flags_buffer.as_ref().unwrap())
-            .build()
-            .expect("Failed to build OpenCL 'streaming_kernel'."));
-        
+        self.streaming_kernel = Some(
+            Kernel::builder()
+                .program(self.program.as_ref().unwrap())
+                .name("streaming_kernel")
+                .queue(self.queue.as_ref().unwrap().clone())
+                .global_work_size(self.N)
+                .arg(self.f_buffer.as_ref().unwrap())
+                .arg(self.f_new_buffer.as_ref().unwrap())
+                .arg(self.flags_buffer.as_ref().unwrap())
+                .build()
+                .expect("Failed to build OpenCL 'streaming_kernel'."),
+        );
+
         // Create kernels and set its arguments
-        self.collision_kernel = Some(Kernel::builder()
-            .program(self.program.as_ref().unwrap())
-            .name("collision_kernel")
-            .queue(self.queue.as_ref().unwrap().clone())
-            .global_work_size(self.N)
-            .arg(self.f_buffer.as_ref().unwrap())
-            .arg(self.density_buffer.as_ref().unwrap())
-            .arg(self.flags_buffer.as_ref().unwrap())
-            .arg(self.u_buffer.as_ref().unwrap())
-            .arg(&self.omega)
-            .build()
-            .expect("Failed to build OpenCL 'collision_kernel'."));
-        
+        self.collision_kernel = Some(
+            Kernel::builder()
+                .program(self.program.as_ref().unwrap())
+                .name("collision_kernel")
+                .queue(self.queue.as_ref().unwrap().clone())
+                .global_work_size(self.N)
+                .arg(self.f_buffer.as_ref().unwrap())
+                .arg(self.density_buffer.as_ref().unwrap())
+                .arg(self.flags_buffer.as_ref().unwrap())
+                .arg(self.u_buffer.as_ref().unwrap())
+                .arg(&self.omega)
+                .build()
+                .expect("Failed to build OpenCL 'collision_kernel'."),
+        );
+
         // Create swap kernel and set its arguments
-        self.swap_kernel = Some(Kernel::builder()
-            .program(self.program.as_ref().unwrap())
-            .name("swap")
-            .queue(self.queue.as_ref().unwrap().clone())
-            .global_work_size(self.N * self.Q)
-            .arg(self.f_buffer.as_ref().unwrap())
-            .arg(self.f_new_buffer.as_ref().unwrap())
-            .build()
-            .expect("Failed to build OpenCL 'swap_kernel'."));
+        self.swap_kernel = Some(
+            Kernel::builder()
+                .program(self.program.as_ref().unwrap())
+                .name("swap")
+                .queue(self.queue.as_ref().unwrap().clone())
+                .global_work_size(self.N * self.Q)
+                .arg(self.f_buffer.as_ref().unwrap())
+                .arg(self.f_new_buffer.as_ref().unwrap())
+                .build()
+                .expect("Failed to build OpenCL 'swap_kernel'."),
+        );
 
         // Create equilibrium kernel for initial conditions
-        self.equilibrium_kernel = Some(Kernel::builder()
-            .program(self.program.as_ref().unwrap())
-            .name("equilibrium")
-            .queue(self.queue.as_ref().unwrap().clone())
-            .global_work_size(self.N)
-            .arg(self.f_buffer.as_ref().unwrap())
-            .arg(self.density_buffer.as_ref().unwrap())
-            .arg(self.u_buffer.as_ref().unwrap())
-            .build()
-            .expect("Failed to build OpenCL 'equilibrium_kernel'."));
+        self.equilibrium_kernel = Some(
+            Kernel::builder()
+                .program(self.program.as_ref().unwrap())
+                .name("equilibrium")
+                .queue(self.queue.as_ref().unwrap().clone())
+                .global_work_size(self.N)
+                .arg(self.f_buffer.as_ref().unwrap())
+                .arg(self.density_buffer.as_ref().unwrap())
+                .arg(self.u_buffer.as_ref().unwrap())
+                .build()
+                .expect("Failed to build OpenCL 'equilibrium_kernel'."),
+        );
 
-        println!("VRAM usage: {:.2} MB", self.calculate_vram_usage() as f64 / (1024.0 * 1024.0));        
+        println!(
+            "VRAM usage: {:.2} MB",
+            self.calculate_vram_usage() as f64 / (1024.0 * 1024.0)
+        );
         terminal_utils::print_success("OpenCL device and context initialized successfully!");
         Ok(())
     }
@@ -338,7 +383,6 @@ impl LBM {
         total_vram
     }
 
-    
     pub fn check_errors_in_input(&mut self) -> Result<(), Box<dyn Error>> {
         // Check if the dimensions are positive
         if self.Nx == 0 || self.Ny == 0 || self.Nz == 0 {
@@ -393,7 +437,7 @@ impl LBM {
 
     pub fn set_conditions<F>(&mut self, f: F)
     where
-        F: Fn(&mut LBM, usize, usize, usize, usize),    // x, y, z, n
+        F: Fn(&mut LBM, usize, usize, usize, usize), // x, y, z, n
     {
         for n in 0..self.N {
             // Get the x, y, z coordinates from the linear index n
@@ -406,7 +450,7 @@ impl LBM {
     }
 
     // Read data from GPU to CPU
-    fn read_from_gpu(&mut self) -> Result<(), Box<dyn Error>> {        
+    fn read_from_gpu(&mut self) -> Result<(), Box<dyn Error>> {
         // Velocity
         self.u_buffer
             .as_ref()
@@ -414,7 +458,7 @@ impl LBM {
             .read(&mut self.u)
             .enq()
             .map_err(|e| format!("Failed to read 'velocity' buffer: {}", e))?;
-    
+
         // Density
         self.density_buffer
             .as_ref()
@@ -422,7 +466,7 @@ impl LBM {
             .read(&mut self.density)
             .enq()
             .map_err(|e| format!("Failed to read 'density' buffer: {}", e))?;
-    
+
         Ok(())
     }
 
@@ -444,8 +488,16 @@ impl LBM {
 
         // Initialize f in equilibrium from rho and u
         unsafe {
-            self.equilibrium_kernel.as_ref().unwrap().enq().expect("Failed to enqueue 'collision_kernel'.");
-            self.queue.as_ref().unwrap().finish().expect("Queue finish failed.");
+            self.equilibrium_kernel
+                .as_ref()
+                .unwrap()
+                .enq()
+                .expect("Failed to enqueue 'collision_kernel'.");
+            self.queue
+                .as_ref()
+                .unwrap()
+                .finish()
+                .expect("Queue finish failed.");
         }
 
         // Create a progress bar
@@ -454,15 +506,16 @@ impl LBM {
         // Customize the progress bar style (optional)
         pb.set_style(
             ProgressStyle::default_bar()
-            .template("{spinner:.green} [{bar:55.cyan/blue}] {pos}/{len} ({eta})")
-            .unwrap()
-            .progress_chars("=> "),
+                .template("{spinner:.green} [{bar:55.cyan/blue}] {pos}/{len} ({eta})")
+                .unwrap()
+                .progress_chars("=> "),
         );
 
         // Recreate output folder -> FUTURE FEATURE: add folder and file customization
         let output_path = Path::new("output");
         if output_path.exists() {
-            std::fs::remove_dir_all(output_path).expect("Failed to remove existing output directory.");
+            std::fs::remove_dir_all(output_path)
+                .expect("Failed to remove existing output directory.");
         }
         std::fs::create_dir(output_path).expect("Failed to create output directory.");
 
@@ -474,26 +527,53 @@ impl LBM {
             // Execute kernels
             // Collision process
             unsafe {
-                self.collision_kernel.as_ref().unwrap().enq().expect("Failed to enqueue 'collision_kernel'.");
-                self.queue.as_ref().unwrap().finish().expect("Queue finish failed.");
+                self.collision_kernel
+                    .as_ref()
+                    .unwrap()
+                    .enq()
+                    .expect("Failed to enqueue 'collision_kernel'.");
+                self.queue
+                    .as_ref()
+                    .unwrap()
+                    .finish()
+                    .expect("Queue finish failed.");
             }
             // Streaming process
             unsafe {
-                self.streaming_kernel.as_ref().unwrap().enq().expect("Failed to enqueue 'streaming_kernel'.");
-                self.queue.as_ref().unwrap().finish().expect("Queue finish failed.");
+                self.streaming_kernel
+                    .as_ref()
+                    .unwrap()
+                    .enq()
+                    .expect("Failed to enqueue 'streaming_kernel'.");
+                self.queue
+                    .as_ref()
+                    .unwrap()
+                    .finish()
+                    .expect("Queue finish failed.");
             }
             // Swap f and f_new after streaming
             unsafe {
-                self.swap_kernel.as_ref().unwrap().enq().expect("Failed to enqueue 'swap_kernel'.");
-                self.queue.as_ref().unwrap().finish().expect("Queue finish failed.");
+                self.swap_kernel
+                    .as_ref()
+                    .unwrap()
+                    .enq()
+                    .expect("Failed to enqueue 'swap_kernel'.");
+                self.queue
+                    .as_ref()
+                    .unwrap()
+                    .finish()
+                    .expect("Queue finish failed.");
             }
-            
+
             // Output data
             if self.output_interval != 0 {
                 if t % self.output_interval == 0 {
                     // Read data from GPU to CPU
                     if let Err(err) = self.read_from_gpu() {
-                        terminal_utils::print_error(&format!("Error reading data from GPU: {}", err));
+                        terminal_utils::print_error(&format!(
+                            "Error reading data from GPU: {}",
+                            err
+                        ));
                         return;
                     }
                     let magnitude = self.time_steps.to_string().len();
@@ -509,13 +589,16 @@ impl LBM {
                         // Export data to VTK file
                         let filename = format!("output/data_{:0width$}.vtk", t, width = magnitude);
                         if let Err(err) = self.export_to_vtk(&filename) {
-                            terminal_utils::print_error(&format!("Error exporting VTK data: {}", err));
+                            terminal_utils::print_error(&format!(
+                                "Error exporting VTK data: {}",
+                                err
+                            ));
                             return;
                         }
                     }
                 }
             }
-            
+
             pb.inc(1); // Increment the progress bar by 1
         }
         pb.finish_with_message("");
@@ -525,13 +608,9 @@ impl LBM {
         let elapsed_seconds = elapsed_time.as_secs_f64();
 
         // Calculate MLUps
-        let mlups = (self.N as f64 * self.time_steps as f64) / elapsed_seconds / 1_000_000.0;   // Performance in Millions Lattice Updates per Second (MLUps)
+        let mlups = (self.N as f64 * self.time_steps as f64) / elapsed_seconds / 1_000_000.0; // Performance in Millions Lattice Updates per Second (MLUps)
 
-        terminal_utils::print_metrics(
-            self.time_steps as u64,
-            elapsed_seconds,
-            mlups,
-        );
+        terminal_utils::print_metrics(self.time_steps as u64, elapsed_seconds, mlups);
     }
 
     pub fn set_output_csv(&mut self, state: bool) {
@@ -544,7 +623,7 @@ impl LBM {
 
     pub fn calculate_vorticity(&self, x: usize, y: usize, z: usize) -> f32 {
         let (vort_x, vort_y, vort_z) = self.calculate_vorticity_vector(x, y, z);
-    
+
         (vort_x * vort_x + vort_y * vort_y + vort_z * vort_z).sqrt()
     }
 
@@ -580,7 +659,7 @@ impl LBM {
         let dx = 1.0_f32;
         let dy = 1.0_f32;
         let dz = 1.0_f32;
-    
+
         let get = |x: usize, y: usize, z: usize, d: usize| -> f32 {
             let xi = x.clamp(0, self.Nx - 1);
             let yi = y.clamp(0, self.Ny - 1);
@@ -588,19 +667,19 @@ impl LBM {
             let i = n_from_xyz(&xi, &yi, &zi, &self.Nx, &self.Ny, &self.Nz);
             self.u[i * 3 + d]
         };
-    
+
         let du_dx = (get(x + 1, y, z, 0) - get(x.saturating_sub(1), y, z, 0)) / (2.0 * dx);
         let du_dy = (get(x, y + 1, z, 0) - get(x, y.saturating_sub(1), z, 0)) / (2.0 * dy);
         let du_dz = (get(x, y, z + 1, 0) - get(x, y, z.saturating_sub(1), 0)) / (2.0 * dz);
-    
+
         let dv_dx = (get(x + 1, y, z, 1) - get(x.saturating_sub(1), y, z, 1)) / (2.0 * dx);
         let dv_dy = (get(x, y + 1, z, 1) - get(x, y.saturating_sub(1), z, 1)) / (2.0 * dy);
         let dv_dz = (get(x, y, z + 1, 1) - get(x, y, z.saturating_sub(1), 1)) / (2.0 * dz);
-    
+
         let dw_dx = (get(x + 1, y, z, 2) - get(x.saturating_sub(1), y, z, 2)) / (2.0 * dx);
         let dw_dy = (get(x, y + 1, z, 2) - get(x, y.saturating_sub(1), z, 2)) / (2.0 * dy);
         let dw_dz = (get(x, y, z + 1, 2) - get(x, y, z.saturating_sub(1), 2)) / (2.0 * dz);
-    
+
         // Strain tensor S (Symmetric)
         let s_xx: f32 = du_dx;
         let s_yy: f32 = dv_dy;
@@ -608,16 +687,18 @@ impl LBM {
         let s_xy: f32 = 0.5 * (du_dy + dv_dx);
         let s_xz: f32 = 0.5 * (du_dz + dw_dx);
         let s_yz: f32 = 0.5 * (dv_dz + dw_dy);
-    
+
         // Vorticity tensor W (Antisymmetric)
         let w_xy: f32 = 0.5 * (du_dy - dv_dx);
         let w_xz: f32 = 0.5 * (du_dz - dw_dx);
         let w_yz: f32 = 0.5 * (dv_dz - dw_dy);
-    
-        let s_norm = s_xx.powi(2) + s_yy.powi(2) + s_zz.powi(2)
-                   + 2.0 * (s_xy.powi(2) + s_xz.powi(2) + s_yz.powi(2));
+
+        let s_norm = s_xx.powi(2)
+            + s_yy.powi(2)
+            + s_zz.powi(2)
+            + 2.0 * (s_xy.powi(2) + s_xz.powi(2) + s_yz.powi(2));
         let w_norm = 2.0 * (w_xy.powi(2) + w_xz.powi(2) + w_yz.powi(2));
-    
+
         0.5 * (w_norm - s_norm)
     }
 
@@ -628,10 +709,13 @@ impl LBM {
         // Create the file and wrap it in a BufWriter for better performance
         let file = File::create(path)?;
         let mut writer = BufWriter::new(file);
-        
+
         // Write the header
-        writeln!(writer, "x, y, z, rho,      ux,       uy,       uz,       v,       q")?;
-        
+        writeln!(
+            writer,
+            "x, y, z, rho,      ux,       uy,       uz,       v,       q"
+        )?;
+
         // Iterate over the grid and write the data
         for n in 0..self.N {
             // Get the x, y, z coordinates from the linear index n
@@ -641,21 +725,21 @@ impl LBM {
             let ux = self.u[n * 3];
             let uy = self.u[n * 3 + 1];
             let uz = self.u[n * 3 + 2];
-            
+
             // Calculate vorticity
             let vorticity = self.calculate_vorticity(x, y, z);
             let q_criteria = self.calculate_q_criterion(x, y, z);
             // Write the data to the file
             writeln!(
-            writer,
-            "{}, {}, {}, {:.6}, {:.6}, {:.6}, {:.6}, {:.6}, {:.6}", // Format floating-point numbers to 6 decimal places
-            x, y, z, rho, ux, uy, uz, vorticity, q_criteria
+                writer,
+                "{}, {}, {}, {:.6}, {:.6}, {:.6}, {:.6}, {:.6}, {:.6}", // Format floating-point numbers to 6 decimal places
+                x, y, z, rho, ux, uy, uz, vorticity, q_criteria
             )?;
         }
-    
+
         // Flush the buffer to ensure all data is written to the file
         writer.flush()?;
-    
+
         //println!("Simulation results have been written to {}", path);
         Ok(())
     }
@@ -667,7 +751,10 @@ impl LBM {
     pub fn get_density(&self) -> Vec<f32> {
         if let Some(buffer) = &self.density_buffer {
             let mut density_data = vec![0.0; self.N];
-            buffer.read(&mut density_data).enq().expect("Failed to read 'density' buffer.");
+            buffer
+                .read(&mut density_data)
+                .enq()
+                .expect("Failed to read 'density' buffer.");
             return density_data;
         }
         vec![] // Return an empty vector if the buffer is not available
@@ -676,7 +763,10 @@ impl LBM {
     pub fn get_velocity(&self) -> Vec<Velocity> {
         if let Some(buffer) = &self.u_buffer {
             let mut velocity_data = vec![0.0; self.N * 3];
-            buffer.read(&mut velocity_data).enq().expect("Failed to read 'velocity' buffer.");
+            buffer
+                .read(&mut velocity_data)
+                .enq()
+                .expect("Failed to read 'velocity' buffer.");
             return velocity_data
                 .chunks(3)
                 .map(|chunk| Velocity {
@@ -690,7 +780,8 @@ impl LBM {
     }
 
     fn velocity_to_u(&self) -> Vec<f32> {
-        self.velocity.iter()
+        self.velocity
+            .iter()
             .flat_map(|v| vec![v.x, v.y, v.z])
             .collect()
     }
@@ -709,9 +800,9 @@ impl LBM {
     pub fn export_to_vtk(&self, filename: &str) -> std::io::Result<()> {
         let file = File::create(filename)?;
         let mut writer = BufWriter::new(file);
-    
+
         let total_points = self.N;
-    
+
         writeln!(writer, "# vtk DataFile Version 3.0")?;
         writeln!(writer, "LatteLab Simulation Output")?;
         writeln!(writer, "ASCII")?;
@@ -720,7 +811,7 @@ impl LBM {
         writeln!(writer, "ORIGIN 0 0 0")?;
         writeln!(writer, "SPACING 1 1 1")?;
         writeln!(writer, "POINT_DATA {}", total_points)?;
-    
+
         // Cache Q-criterion and vorticity
         let mut q_crit = vec![0.0; self.N];
         let mut vorticity = vec![(0.0, 0.0, 0.0); self.N];
@@ -733,14 +824,14 @@ impl LBM {
                 }
             }
         }
-    
+
         // Density
         writeln!(writer, "SCALARS density float")?;
         writeln!(writer, "LOOKUP_TABLE default")?;
         for val in &self.density {
             writeln!(writer, "{:.6}", val)?;
         }
-    
+
         // Velocity
         writeln!(writer, "VECTORS velocity float")?;
         for i in 0..total_points {
@@ -752,23 +843,22 @@ impl LBM {
                 self.u[i * 3 + 2]
             )?;
         }
-    
+
         // Q-Criterion
         writeln!(writer, "SCALARS q_criterion float")?;
         writeln!(writer, "LOOKUP_TABLE default")?;
         for val in &q_crit {
             writeln!(writer, "{:.6}", val)?;
         }
-    
+
         // Vorticity
         writeln!(writer, "VECTORS vorticity float")?;
         for (vx, vy, vz) in &vorticity {
             writeln!(writer, "{:.6} {:.6} {:.6}", vx, vy, vz)?;
         }
-    
+
         Ok(())
     }
-
 }
 
 pub fn n_from_xyz(x: &usize, y: &usize, z: &usize, Nx: &usize, Ny: &usize, Nz: &usize) -> usize {
