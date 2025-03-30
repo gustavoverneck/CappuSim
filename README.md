@@ -36,6 +36,7 @@ To run it, clone the directory and execute it using cargo:
 ```bash
 git clone https://github.com/gustavoverneck/LatteLab
 cd LatteLab
+cargo build --release
 cargo run
 ```
 
