@@ -132,6 +132,11 @@ impl LBM {
 
             pb.inc(1); // Increment the progress bar by 1
         }
+        // Read data from GPU to CPU
+        if let Err(err) = self.read_from_gpu() {
+            terminal_utils::print_error(&format!("Error reading data from GPU: {}", err));
+            return;
+        }
         pb.finish_with_message("");
 
         // Calculate total execution time

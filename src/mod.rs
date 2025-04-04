@@ -1,2 +1,2 @@
-pub mod lbm;
+pub mod solver;
 pub mod utils;

@@ -4,26 +4,26 @@
 #![allow(unused_imports)]
 
 // Import
-mod lbm;
+mod solver;
 mod utils;
-use lbm::flags::{FLAG_EQ, FLAG_FLUID, FLAG_SOLID};
-use lbm::lbm::LBM;
+use solver::flags::{FLAG_EQ, FLAG_FLUID, FLAG_SOLID};
+use solver::lbm::LBM;
 
 // =============================================================================
 // Benchmark Example
-fn main() {
-    let nx = 128;
-    let ny = 128;
-    let nz = 128;
-    let viscosity = 0.1;
-    let time_steps = 50;
+// fn main() {
+//     let nx = 128;
+//     let ny = 128;
+//     let nz = 128;
+//     let viscosity = 0.1;
+//     let time_steps = 50;
 
-    // Initialize LBM simulation
-    let mut lbm = LBM::new(nx, ny, nz, "D3Q19".to_string(), viscosity);
+//     // Initialize LBM simulation
+//     let mut lbm = LBM::new(nx, ny, nz, "D3Q19".to_string(), viscosity);
 
-    // Run the simulation
-    lbm.run(time_steps);
-}
+//     // Run the simulation
+//     lbm.run(time_steps);
+// }
 
 // =============================================================================
 
@@ -118,51 +118,51 @@ fn main() {
 // =============================================================================
 
 // 2D Von-Kármán Vortex Street Example
-// fn main() {
-//     let nx = 256;
-//     let ny = 128;
-//     let viscosity = 0.01;
-//     let u0 = 0.1;
+// // fn main() {
+// //     let nx = 256;
+// //     let ny = 128;
+// //     let viscosity = 0.01;
+// //     let u0 = 0.1;
 
-//     // Initialize LBM simulation
-//     let mut lbm = LBM::new(nx, ny, 1, "D2Q9".to_string(), viscosity);
+// //     // Initialize LBM simulation
+// //     let mut lbm = LBM::new(nx, ny, 1, "D2Q9".to_string(), viscosity);
 
-//     // Cylinder parameters
-//     let radius = nx as f32 * 0.08;
-//     let cx = nx as i32 / 4; // 25% from left
-//     let cy = ny as i32 / 2;
+// //     // Cylinder parameters
+// //     let radius = nx as f32 * 0.08;
+// //     let cx = nx as i32 / 4; // 25% from left
+// //     let cy = ny as i32 / 2;
 
-//     // Set boundary and initial conditions
-//     lbm.set_conditions(|lbm, x, y, _z, n| {
-//         let dx = x as i32 - cx;
-//         let dy = y as i32 - cy;
-//         let dist = ((dx * dx + dy * dy) as f32).sqrt();
+// //     // Set boundary and initial conditions
+// //     lbm.set_conditions(|lbm, x, y, _z, n| {
+// //         let dx = x as i32 - cx;
+// //         let dy = y as i32 - cy;
+// //         let dist = ((dx * dx + dy * dy) as f32).sqrt();
 
-//         if dist <= radius {
-//             lbm.flags[n] = FLAG_SOLID; // Cylinder obstacle
-//         } else if x == 0 {
-//             // Inlet with prescribed velocity
-//             lbm.flags[n] = FLAG_EQ;
-//             lbm.velocity[n].x = u0;
-//             lbm.velocity[n].y = 0.0;
-//             lbm.density[n] = 1.0;
-//         } else if x == nx - 1 {
-//             // Outflow: still FLAG_EQ for now, but zero-velocity to reduce reflection
-//             lbm.flags[n] = FLAG_EQ;
-//             lbm.velocity[n].x = u0;
-//             lbm.velocity[n].y = 0.0;
-//             lbm.density[n] = 1.0;
-//         } else if y == 0 || y == ny - 1 {
-//             // Top and bottom walls
-//             lbm.flags[n] = FLAG_SOLID;
-//         } else {
-//             // Normal fluid region
-//             lbm.flags[n] = FLAG_FLUID;
-//             lbm.velocity[n].x = u0;
-//             lbm.velocity[n].y = 0.0;
-//             lbm.density[n] = 1.0;
-//         }
-//     });
+// //         if dist <= radius {
+// //             lbm.flags[n] = FLAG_SOLID; // Cylinder obstacle
+// //         } else if x == 0 {
+// //             // Inlet with prescribed velocity
+// //             lbm.flags[n] = FLAG_EQ;
+// //             lbm.velocity[n].x = u0;
+// //             lbm.velocity[n].y = 0.0;
+// //             lbm.density[n] = 1.0;
+// //         } else if x == nx - 1 {
+// //             // Outflow: still FLAG_EQ for now, but zero-velocity to reduce reflection
+// //             lbm.flags[n] = FLAG_EQ;
+// //             lbm.velocity[n].x = u0;
+// //             lbm.velocity[n].y = 0.0;
+// //             lbm.density[n] = 1.0;
+// //         } else if y == 0 || y == ny - 1 {
+// //             // Top and bottom walls
+// //             lbm.flags[n] = FLAG_SOLID;
+// //         } else {
+// //             // Normal fluid region
+// //             lbm.flags[n] = FLAG_FLUID;
+// //             lbm.velocity[n].x = u0;
+// //             lbm.velocity[n].y = 0.0;
+// //             lbm.density[n] = 1.0;
+// //         }
+// //     });
 
 //     // Configure output
 //     lbm.set_output_vtk(true);
@@ -339,3 +339,177 @@ fn main() {
 //     // Run the simulation
 //     lbm.run(20000);
 // }
+
+// =============================================================================
+// Flow over pile
+// fn main() {
+//     // -------------------------------------
+//     // Grid Setup
+//     let nx = 1024;
+//     let ny = 1024;
+//     let nz = 1;
+//     let viscosity = 0.01;
+//     let model = "D2Q9".to_string();
+//     let mut lbm = LBM::new(nx, ny, nz, model, viscosity);
+//     let jet_velocity = -0.1;
+
+//     // -------------------------------------
+//     // Triangle parameters
+//     let height = 100.0; // Height in lattice units
+//     let aspect_ratio = 3.0; // base/height → base = 400
+//     let base = aspect_ratio * height;
+
+//     let cx = nx as f32 / 2.0;
+//     let half_base = base / 2.0;
+
+//     // -------------------------------------
+//     // Beam parameters
+//     let beam_center_x = nx / 2;
+//     let beam_radius = 20;
+
+//     lbm.set_conditions(|lbm, x, y, _z, n| {
+//         let xf = x as f32;
+//         let yf = y as f32;
+    
+//         // Always solid ground
+//         if y == 0 {
+//             lbm.flags[n] = FLAG_SOLID;
+//             lbm.density[n] = 0.0;
+//             return;
+//         }
+    
+//         // Triangle (sits above ground, from y = 1 to y = height)
+//         let dx = (xf - cx).abs();
+//         if yf <= height && dx <= ((height - yf) / height) * half_base {
+//             lbm.flags[n] = FLAG_SOLID;
+//             lbm.density[n] = 0.0;
+//             return;
+//         }
+    
+//         // Side walls
+//         if x == 0 || x == nx - 1 {
+//             lbm.flags[n] = FLAG_EQ;
+//             lbm.density[n] = 1.0;
+//             lbm.velocity[n].x = 0.0;
+//             lbm.velocity[n].y = 0.0;
+//             return;
+//         }
+    
+//         // Top wall
+//         if y == ny - 1 {
+//             lbm.flags[n] = FLAG_EQ;
+//             lbm.density[n] = 1.0;
+//             lbm.velocity[n].x = 0.0;
+//             lbm.velocity[n].y = 0.0;
+//             return;
+//         }
+    
+//         // Vertical jet (top-down)
+//         if (x as i32 - beam_center_x as i32).abs() < beam_radius && y > ny / 2 {
+//             lbm.flags[n] = FLAG_FLUID;
+//             lbm.density[n] = 1.0;
+//             lbm.velocity[n].x = 0.0;
+//             lbm.velocity[n].y = jet_velocity;
+//             return;
+//         }
+    
+//         // Else: rest of the domain is fluid
+//         lbm.flags[n] = FLAG_FLUID;
+//         lbm.density[n] = 1.0;
+//         lbm.velocity[n].x = 0.0;
+//         lbm.velocity[n].y = 0.0;
+//     });
+
+//     // lbm.set_output_vtk(true);
+//     // lbm.set_output_interval(500);
+//     lbm.run(10000);
+//     lbm.export_to_vtk(&format!("results/pile_flow_h{}.vtk", height as i32)).expect("Failed to write VTK output.");
+//     let re = jet_velocity.abs() * ny as f32 / viscosity;
+//     println!("Reynolds number: {}", re);
+// }
+
+
+
+fn main() {
+    // -------------------------------------
+    // Grid Setup
+    let nx = 1024;
+    let ny = 1024;
+    let nz = 1;
+    let viscosity = 0.01;
+    let model = "D2Q9".to_string();
+    let jet_velocity = -0.1;
+
+    // -------------------------------------
+    // Beam parameters
+    let beam_center_x = nx / 2;
+    let beam_radius = 20;
+
+    for height in (110..=200).step_by(10) {
+        let mut lbm = LBM::new(nx.clone(), ny.clone(), nz.clone(), model.clone(), viscosity.clone());
+        let aspect_ratio = 3.0; // base/height → base = 400
+        let base = aspect_ratio * height as f32;
+
+        let cx = nx as f32 / 2.0;
+        let half_base = base / 2.0;
+
+        lbm.set_conditions(|lbm, x, y, _z, n| {
+            let xf = x as f32;
+            let yf = y as f32;
+
+            // Always solid ground
+            if y == 0 {
+                lbm.flags[n] = FLAG_SOLID;
+                lbm.density[n] = 0.0;
+                return;
+            }
+
+            // Triangle (sits above ground, from y = 1 to y = height)
+            let dx = (xf - cx).abs();
+            if yf <= height as f32 && dx <= ((height as f32 - yf) / height as f32) * half_base {
+                lbm.flags[n] = FLAG_SOLID;
+                lbm.density[n] = 0.0;
+                return;
+            }
+
+            // Side walls
+            if x == 0 || x == nx - 1 {
+                lbm.flags[n] = FLAG_EQ;
+                lbm.density[n] = 1.0;
+                lbm.velocity[n].x = 0.0;
+                lbm.velocity[n].y = 0.0;
+                return;
+            }
+
+            // Top wall
+            if y == ny - 1 {
+                lbm.flags[n] = FLAG_EQ;
+                lbm.density[n] = 1.0;
+                lbm.velocity[n].x = 0.0;
+                lbm.velocity[n].y = 0.0;
+                return;
+            }
+
+            // Vertical jet (top-down)
+            if (x as i32 - beam_center_x as i32).abs() < beam_radius && y > ny / 2 {
+                lbm.flags[n] = FLAG_FLUID;
+                lbm.density[n] = 1.0;
+                lbm.velocity[n].x = 0.0;
+                lbm.velocity[n].y = jet_velocity;
+                return;
+            }
+
+            // Else: rest of the domain is fluid
+            lbm.flags[n] = FLAG_FLUID;
+            lbm.density[n] = 1.0;
+            lbm.velocity[n].x = 0.0;
+            lbm.velocity[n].y = 0.0;
+        });
+
+        lbm.run(10000);
+        lbm.export_to_vtk(&format!("results/pile_flow_h{}.vtk", height as i32))
+            .expect("Failed to write VTK output.");
+        let re = jet_velocity.abs() * ny as f32 / viscosity;
+        println!("Height: {}, Reynolds number: {}", height, re);
+    }
+}
