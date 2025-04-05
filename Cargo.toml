@@ -1,14 +1,14 @@
 [package]
-name = "lattelab"
+name = "CappuSim"
 version = "0.1.2"
 edition = "2021"  # Currently the latest stable edition
 
 description = "A Rust CFD solver based on LBM and powered by OpenCL."
 keywords = ["CFD", "LBM", "OpenCL", "fluid-dynamics", "simulation"]
 categories = ["science", "simulation", "mathematics"]
-documentation = "https://docs.rs/lattelab"
-homepage = "https://github.com/gustavoverneck/LatteLab"
-repository = "https://github.com/gustavoverneck/LatteLab"
+documentation = "https://docs.rs/CappuSim"
+homepage = "https://github.com/gustavoverneck/CappuSim"
+repository = "https://github.com/gustavoverneck/CappuSim"
 authors = ["Gustavo A. Verneck <gustavoverneck@gmail.com>"]
 license = "GPL-3.0-or-later"  # "GNUv3" isn't standard notation, use correct SPDX identifier
 readme = "README.md"
