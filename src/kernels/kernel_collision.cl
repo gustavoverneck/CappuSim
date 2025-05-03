@@ -17,7 +17,7 @@ __kernel void collision_kernel(
 
     // Accumulate density and momentum from distributions
     for (int q = 0; q < Q; q++) {
-        float fq = f[n * Q + q];
+        float fq = f[q * N + n];
         local_rho += fq;
         ux += c[q][0] * fq;
         uy += c[q][1] * fq;
@@ -40,10 +40,9 @@ __kernel void collision_kernel(
 
         u2 = ux * ux + uy * uy + uz * uz;
 
-
         for (int q = 0; q < Q; q++) {
             float cu = c[q][0] * ux + c[q][1] * uy + c[q][2] * uz;
-            f[n * Q + q] = local_rho * w[q] * (1.0f + 3.0f * cu + 4.5f * cu * cu - 1.5f * u2);
+            f[q * N + n] = local_rho * w[q] * (1.0f + 3.0f * cu + 4.5f * cu * cu - 1.5f * u2);
         }
     } else {
         // Standard collision (BGK) for fluid cells
@@ -54,11 +53,10 @@ __kernel void collision_kernel(
 
         u2 = ux * ux + uy * uy + uz * uz;
 
-
         for (int q = 0; q < Q; q++) {
             float cu = c[q][0] * ux + c[q][1] * uy + c[q][2] * uz;
             float feq = local_rho * w[q] * (1.0f + 3.0f * cu + 4.5f * cu * cu - 1.5f * u2);
-            f[n * Q + q] = (1.0f - omega) * f[n * Q + q] + omega * feq;
+            f[q * N + n] = (1.0f - omega) * f[q * N + n] + omega * feq;
         }
     }
 }

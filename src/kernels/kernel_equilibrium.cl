@@ -24,6 +24,6 @@ __kernel void equilibrium(
         float cu = c[q][0] * ux + c[q][1] * uy + c[q][2] * uz;
 
         // Compute the equilibrium distribution function for the current direction
-        f[n * Q + q] = local_rho * w[q] * (1.0f + 3.0f * cu + 4.5f * cu * cu - 1.5f * u2);
+        f[q * N + n] = local_rho * w[q] * (1.0f + 3.0f * cu + 4.5f * cu * cu - 1.5f * u2);
     }
 }

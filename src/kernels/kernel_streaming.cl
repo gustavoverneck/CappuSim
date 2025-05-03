@@ -12,24 +12,26 @@ __kernel void streaming_kernel(
     int y = (n / NX) % NY;
     int z = n / (NX * NY);
 
+    // Pull scheme: Each node pulls from its neighbors instead of pushing to them
     for (int q = 0; q < Q; q++) {
         int dx = c[q][0];
         int dy = c[q][1];
         int dz = c[q][2];
 
-        int xn = (x + dx + NX) % NX;
-        int yn = (y + dy + NY) % NY;
-        int zn = (z + dz + NZ) % NZ;
+        // Compute neighbor in the opposite direction (pull from)
+        int xp = (x - dx + NX) % NX;
+        int yp = (y - dy + NY) % NY;
+        int zp = (z - dz + NZ) % NZ;
 
-        int nn = zn * (NX * NY) + yn * NX + xn;
-
-        int neighbor_flag = flags[nn];
+        int np = zp * (NX * NY) + yp * NX + xp;
+        int neighbor_flag = flags[np];
 
         if (neighbor_flag == FLAG_SOLID) {
-            f_new[n * Q + opposite[q]] = f[n * Q + q];
-        }
-        else if (neighbor_flag == FLAG_FLUID || neighbor_flag == FLAG_EQ) {
-            f_new[nn * Q + q] = f[n * Q + q];
+            // For solid neighbors, bounce back
+            f_new[q * (NX * NY * NZ) + n] = f[opposite[q] * (NX * NY * NZ) + n];
+        } else if (neighbor_flag == FLAG_FLUID || neighbor_flag == FLAG_EQ) {
+            // Pull the distribution from the neighbor
+            f_new[q * (NX * NY * NZ) + n] = f[q * (NX * NY * NZ) + np];
         }
     }
 }
