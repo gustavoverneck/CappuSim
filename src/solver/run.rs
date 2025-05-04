@@ -66,10 +66,10 @@ impl LBM {
             // Execute kernels
             // Collision process
             unsafe {
-                self.collision_kernel
-                    .as_ref()
-                    .unwrap()
-                    .enq()
+                let kernel = self.collision_kernel.as_ref().unwrap();
+                kernel.set_arg(6, &(t as i32))
+                    .expect("Failed to set kernel argument.");
+                kernel.enq()
                     .expect("Failed to enqueue 'collision_kernel'.");
                 self.queue
                     .as_ref()
@@ -79,24 +79,11 @@ impl LBM {
             }
             // Streaming process
             unsafe {
-                self.streaming_kernel
-                    .as_ref()
-                    .unwrap()
-                    .enq()
+                let kernel = self.streaming_kernel.as_ref().unwrap();
+                kernel.set_arg(3, &(t as i32))
+                    .expect("Failed to set kernel argument.");
+                kernel.enq()
                     .expect("Failed to enqueue 'streaming_kernel'.");
-                self.queue
-                    .as_ref()
-                    .unwrap()
-                    .finish()
-                    .expect("Queue finish failed.");
-            }
-            // Swap f and f_new after streaming
-            unsafe {
-                self.swap_kernel
-                    .as_ref()
-                    .unwrap()
-                    .enq()
-                    .expect("Failed to enqueue 'swap_kernel'.");
                 self.queue
                     .as_ref()
                     .unwrap()

@@ -117,6 +117,7 @@ impl LBM {
                 .arg(self.f_buffer.as_ref().unwrap())
                 .arg(self.f_new_buffer.as_ref().unwrap())
                 .arg(self.flags_buffer.as_ref().unwrap())
+                .arg(0i32)
                 .build()
                 .expect("Failed to build OpenCL 'streaming_kernel'."),
         );
@@ -131,27 +132,14 @@ impl LBM {
                 .queue(self.queue.as_ref().unwrap().clone())
                 .global_work_size(self.N)
                 .arg(self.f_buffer.as_ref().unwrap())
+                .arg(self.f_new_buffer.as_ref().unwrap())
                 .arg(self.density_buffer.as_ref().unwrap())
                 .arg(self.flags_buffer.as_ref().unwrap())
                 .arg(self.u_buffer.as_ref().unwrap())
                 .arg(self.omega)
+                .arg(0i32)
                 .build()
                 .expect("Failed to build OpenCL 'collision_kernel'."),
-        );
-        Ok(())
-    }
-
-    pub fn create_swap_kernel(&mut self) -> Result<(), Box<dyn Error>> {
-        self.swap_kernel = Some(
-            Kernel::builder()
-                .program(self.program.as_ref().unwrap())
-                .name("swap")
-                .queue(self.queue.as_ref().unwrap().clone())
-                .global_work_size(self.N * self.Q)
-                .arg(self.f_buffer.as_ref().unwrap())
-                .arg(self.f_new_buffer.as_ref().unwrap())
-                .build()
-                .expect("Failed to build OpenCL 'swap_kernel'."),
         );
         Ok(())
     }

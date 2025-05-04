@@ -33,7 +33,6 @@ pub struct LBM {
     pub program: Option<Program>,
     pub streaming_kernel: Option<Kernel>,
     pub collision_kernel: Option<Kernel>,
-    pub swap_kernel: Option<Kernel>,
     pub equilibrium_kernel: Option<Kernel>,
     pub found_errors: bool,
     pub output_interval: usize,

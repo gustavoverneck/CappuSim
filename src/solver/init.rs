@@ -46,7 +46,6 @@ impl LBM {
             program: None,
             streaming_kernel: None,
             collision_kernel: None,
-            swap_kernel: None,
             equilibrium_kernel: None,
             found_errors: false,
             output_interval: 0,
@@ -99,9 +98,6 @@ impl LBM {
         
         self.create_equilibrium_kernel()
             .expect("Failed to create 'equilibrium kernel'.");
-
-        self.create_swap_kernel()
-            .expect("Failed to create 'swap kernel'.");
 
         self.calculate_vram_usage();
     }
