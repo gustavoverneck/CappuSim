@@ -7,7 +7,6 @@ use std::error::Error;
 pub const KERNEL_EQUILIBRIUM_SRC: &str = include_str!("../kernels/kernel_equilibrium.cl");
 pub const KERNEL_STREAMING_SRC: &str = include_str!("../kernels/kernel_streaming.cl");
 pub const KERNEL_COLLISION_SRC: &str = include_str!("../kernels/kernel_collision.cl");
-pub const KERNEL_SWAP_SRC: &str = include_str!("../kernels/kernel_swap.cl");
 pub const KERNEL_VELOCITY_SETS_SRC: &str = include_str!("../kernels/kernel_velocity_sets.cl");
 
 impl LBM {
@@ -27,7 +26,6 @@ impl LBM {
         {}
         {}
         {}
-        {}
         "#,
             self.Nx,
             self.Ny,
@@ -39,7 +37,6 @@ impl LBM {
             KERNEL_STREAMING_SRC,
             KERNEL_COLLISION_SRC,
             KERNEL_EQUILIBRIUM_SRC,
-            KERNEL_SWAP_SRC,
         );
         Ok(kernel_source)
     }

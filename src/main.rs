@@ -11,19 +11,19 @@ use solver::lbm::LBM;
 
 // =============================================================================
 // Benchmark Example
-// fn main() {
-//     let nx = 128;
-//     let ny = 128;
-//     let nz = 128;
-//     let viscosity = 0.1;
-//     let time_steps = 50;
+fn main() {
+    let nx = 128;
+    let ny = 128;
+    let nz = 128;
+    let viscosity = 0.1;
+    let time_steps = 50;
 
-//     // Initialize LBM simulation
-//     let mut lbm = LBM::new(nx, ny, nz, "D3Q19".to_string(), viscosity);
+    // Initialize LBM simulation
+    let mut lbm = LBM::new(nx, ny, nz, "D3Q19".to_string(), viscosity);
 
-//     // Run the simulation
-//     lbm.run(time_steps);
-// }
+    // Run the simulation
+    lbm.run(time_steps);
+}
 
 // =============================================================================
 
@@ -75,7 +75,7 @@ use solver::lbm::LBM;
 //     let viscosity = 0.05;
 //     let u0 = 0.1;
 //     let steps = 20000;
-//     let output_interval = 19999;
+// //    let output_interval = 19999;
 
 //     // Initialize LBM simulation
 //     let mut lbm = LBM::new(nx, ny, nz, "D2Q9".to_string(), viscosity);
@@ -107,8 +107,8 @@ use solver::lbm::LBM;
 //     });
 
 //     // Configure output
-//     lbm.set_output_vtk(true);
-//     lbm.set_output_interval(output_interval);
+// //    lbm.set_output_vtk(true);
+// //    lbm.set_output_interval(output_interval);
 
 //     // Run the simulation
 //     lbm.run(steps);
@@ -118,51 +118,51 @@ use solver::lbm::LBM;
 // =============================================================================
 
 // 2D Von-Kármán Vortex Street Example
-// // fn main() {
-// //     let nx = 256;
-// //     let ny = 128;
-// //     let viscosity = 0.01;
-// //     let u0 = 0.1;
+// fn main() {
+//     let nx = 256;
+//     let ny = 128;
+//     let viscosity = 0.01;
+//     let u0 = 0.1;
 
-// //     // Initialize LBM simulation
-// //     let mut lbm = LBM::new(nx, ny, 1, "D2Q9".to_string(), viscosity);
+//     // Initialize LBM simulation
+//     let mut lbm = LBM::new(nx, ny, 1, "D2Q9".to_string(), viscosity);
 
-// //     // Cylinder parameters
-// //     let radius = nx as f32 * 0.08;
-// //     let cx = nx as i32 / 4; // 25% from left
-// //     let cy = ny as i32 / 2;
+//     // Cylinder parameters
+//     let radius = nx as f32 * 0.08;
+//     let cx = nx as i32 / 4; // 25% from left
+//     let cy = ny as i32 / 2;
 
-// //     // Set boundary and initial conditions
-// //     lbm.set_conditions(|lbm, x, y, _z, n| {
-// //         let dx = x as i32 - cx;
-// //         let dy = y as i32 - cy;
-// //         let dist = ((dx * dx + dy * dy) as f32).sqrt();
+//     // Set boundary and initial conditions
+//     lbm.set_conditions(|lbm, x, y, _z, n| {
+//         let dx = x as i32 - cx;
+//         let dy = y as i32 - cy;
+//         let dist = ((dx * dx + dy * dy) as f32).sqrt();
 
-// //         if dist <= radius {
-// //             lbm.flags[n] = FLAG_SOLID; // Cylinder obstacle
-// //         } else if x == 0 {
-// //             // Inlet with prescribed velocity
-// //             lbm.flags[n] = FLAG_EQ;
-// //             lbm.velocity[n].x = u0;
-// //             lbm.velocity[n].y = 0.0;
-// //             lbm.density[n] = 1.0;
-// //         } else if x == nx - 1 {
-// //             // Outflow: still FLAG_EQ for now, but zero-velocity to reduce reflection
-// //             lbm.flags[n] = FLAG_EQ;
-// //             lbm.velocity[n].x = u0;
-// //             lbm.velocity[n].y = 0.0;
-// //             lbm.density[n] = 1.0;
-// //         } else if y == 0 || y == ny - 1 {
-// //             // Top and bottom walls
-// //             lbm.flags[n] = FLAG_SOLID;
-// //         } else {
-// //             // Normal fluid region
-// //             lbm.flags[n] = FLAG_FLUID;
-// //             lbm.velocity[n].x = u0;
-// //             lbm.velocity[n].y = 0.0;
-// //             lbm.density[n] = 1.0;
-// //         }
-// //     });
+//         if dist <= radius {
+//             lbm.flags[n] = FLAG_SOLID; // Cylinder obstacle
+//         } else if x == 0 {
+//             // Inlet with prescribed velocity
+//             lbm.flags[n] = FLAG_EQ;
+//             lbm.velocity[n].x = u0;
+//             lbm.velocity[n].y = 0.0;
+//             lbm.density[n] = 1.0;
+//         } else if x == nx - 1 {
+//             // Outflow: still FLAG_EQ for now, but zero-velocity to reduce reflection
+//             lbm.flags[n] = FLAG_EQ;
+//             lbm.velocity[n].x = u0;
+//             lbm.velocity[n].y = 0.0;
+//             lbm.density[n] = 1.0;
+//         } else if y == 0 || y == ny - 1 {
+//             // Top and bottom walls
+//             lbm.flags[n] = FLAG_SOLID;
+//         } else {
+//             // Normal fluid region
+//             lbm.flags[n] = FLAG_FLUID;
+//             lbm.velocity[n].x = u0;
+//             lbm.velocity[n].y = 0.0;
+//             lbm.density[n] = 1.0;
+//         }
+//     });
 
 //     // Configure output
 //     lbm.set_output_vtk(true);
@@ -428,88 +428,292 @@ use solver::lbm::LBM;
 //     println!("Reynolds number: {}", re);
 // }
 
+// =============================================================================
+
+// fn main() {
+//     // -------------------------------------
+//     // Grid Setup
+//     let nx = 1024;
+//     let ny = 1024;
+//     let nz = 1;
+//     let viscosity = 0.01;
+//     let model = "D2Q9".to_string();
+//     let jet_velocity = -0.1;
+
+//     // -------------------------------------
+//     // Beam parameters
+//     let beam_center_x = nx / 2;
+//     let beam_radius = 20;
+
+//     for height in (110..=200).step_by(10) {
+//         let mut lbm = LBM::new(nx.clone(), ny.clone(), nz.clone(), model.clone(), viscosity.clone());
+//         let aspect_ratio = 3.0; // base/height → base = 400
+//         let base = aspect_ratio * height as f32;
+
+//         let cx = nx as f32 / 2.0;
+//         let half_base = base / 2.0;
+
+//         lbm.set_conditions(|lbm, x, y, _z, n| {
+//             let xf = x as f32;
+//             let yf = y as f32;
+
+//             // Always solid ground
+//             if y == 0 {
+//                 lbm.flags[n] = FLAG_SOLID;
+//                 lbm.density[n] = 0.0;
+//                 return;
+//             }
+
+//             // Triangle (sits above ground, from y = 1 to y = height)
+//             let dx = (xf - cx).abs();
+//             if yf <= height as f32 && dx <= ((height as f32 - yf) / height as f32) * half_base {
+//                 lbm.flags[n] = FLAG_SOLID;
+//                 lbm.density[n] = 0.0;
+//                 return;
+//             }
+
+//             // Side walls
+//             if x == 0 || x == nx - 1 {
+//                 lbm.flags[n] = FLAG_EQ;
+//                 lbm.density[n] = 1.0;
+//                 lbm.velocity[n].x = 0.0;
+//                 lbm.velocity[n].y = 0.0;
+//                 return;
+//             }
+
+//             // Top wall
+//             if y == ny - 1 {
+//                 lbm.flags[n] = FLAG_EQ;
+//                 lbm.density[n] = 1.0;
+//                 lbm.velocity[n].x = 0.0;
+//                 lbm.velocity[n].y = 0.0;
+//                 return;
+//             }
+
+//             // Vertical jet (top-down)
+//             if (x as i32 - beam_center_x as i32).abs() < beam_radius && y > ny / 2 {
+//                 lbm.flags[n] = FLAG_FLUID;
+//                 lbm.density[n] = 1.0;
+//                 lbm.velocity[n].x = 0.0;
+//                 lbm.velocity[n].y = jet_velocity;
+//                 return;
+//             }
+
+//             // Else: rest of the domain is fluid
+//             lbm.flags[n] = FLAG_FLUID;
+//             lbm.density[n] = 1.0;
+//             lbm.velocity[n].x = 0.0;
+//             lbm.velocity[n].y = 0.0;
+//         });
+
+//         lbm.run(10000);
+//         lbm.export_to_vtk(&format!("results/pile_flow_h{}.vtk", height as i32))
+//             .expect("Failed to write VTK output.");
+//         let re = jet_velocity.abs() * ny as f32 / viscosity;
+//         println!("Height: {}, Reynolds number: {}", height, re);
+//     }
+// }
+
+// =============================================================================
 
 
-fn main() {
-    // -------------------------------------
-    // Grid Setup
-    let nx = 1024;
-    let ny = 1024;
-    let nz = 1;
-    let viscosity = 0.01;
-    let model = "D2Q9".to_string();
-    let jet_velocity = -0.1;
+// 2D NACA Airfoil Flow Example
+// fn main() {
+//     let nx = 1024;
+//     let ny = 512;
+//     let nz = 1;
+//     let viscosity = 0.01;
+//     let u0 = 0.1; // Inlet velocity
+//     let angle_of_attack = 10.0; // Degrees
+//     let chord_length = nx as f32 * 0.3; // 30% of domain width
+    
+//     // Initialize LBM simulation
+//     let mut lbm = LBM::new(nx, ny, nz, "D2Q9".to_string(), viscosity);
 
-    // -------------------------------------
-    // Beam parameters
-    let beam_center_x = nx / 2;
-    let beam_radius = 20;
+//     // NACA 0012 parameters
+//     let thickness = 0.12; // 12% thickness
+//     let cx = nx as f32 * 0.3; // Position airfoil at 30% from left
+//     let cy = ny as f32 * 0.5; // Center vertically
 
-    for height in (110..=200).step_by(10) {
-        let mut lbm = LBM::new(nx.clone(), ny.clone(), nz.clone(), model.clone(), viscosity.clone());
-        let aspect_ratio = 3.0; // base/height → base = 400
-        let base = aspect_ratio * height as f32;
+//     // Convert angle to radians
+//     let angle_rad = angle_of_attack * std::f32::consts::PI / 180.0;
 
-        let cx = nx as f32 / 2.0;
-        let half_base = base / 2.0;
+//     // Set boundary and initial conditions
+//     lbm.set_conditions(|lbm, x, y, _z, n| {
+//         let xf = x as f32;
+//         let yf = y as f32;
 
-        lbm.set_conditions(|lbm, x, y, _z, n| {
-            let xf = x as f32;
-            let yf = y as f32;
+//         // Transform coordinates to airfoil reference frame
+//         let dx = xf - cx;
+//         let dy = yf - cy;
+        
+//         // Rotate coordinates
+//         let x_rot = dx * angle_rad.cos() + dy * angle_rad.sin();
+//         let y_rot = -dx * angle_rad.sin() + dy * angle_rad.cos();
 
-            // Always solid ground
-            if y == 0 {
-                lbm.flags[n] = FLAG_SOLID;
-                lbm.density[n] = 0.0;
-                return;
-            }
+//         // Normalized chord position
+//         let x_c = x_rot / chord_length;
 
-            // Triangle (sits above ground, from y = 1 to y = height)
-            let dx = (xf - cx).abs();
-            if yf <= height as f32 && dx <= ((height as f32 - yf) / height as f32) * half_base {
-                lbm.flags[n] = FLAG_SOLID;
-                lbm.density[n] = 0.0;
-                return;
-            }
+//         if x_c >= 0.0 && x_c <= 1.0 {
+//             // NACA 0012 formula
+//             let yt = 5.0 * thickness * (0.2969 * x_c.sqrt() - 0.1260 * x_c 
+//                 - 0.3516 * x_c.powi(2) + 0.2843 * x_c.powi(3) 
+//                 - 0.1015 * x_c.powi(4));
+            
+//             let y_upper = y_rot - yt * chord_length;
+//             let y_lower = y_rot + yt * chord_length;
 
-            // Side walls
-            if x == 0 || x == nx - 1 {
-                lbm.flags[n] = FLAG_EQ;
-                lbm.density[n] = 1.0;
-                lbm.velocity[n].x = 0.0;
-                lbm.velocity[n].y = 0.0;
-                return;
-            }
+//             if y_upper.abs() <= yt * chord_length {
+//                 lbm.flags[n] = FLAG_SOLID;
+//                 return;
+//             }
+//         }
 
-            // Top wall
-            if y == ny - 1 {
-                lbm.flags[n] = FLAG_EQ;
-                lbm.density[n] = 1.0;
-                lbm.velocity[n].x = 0.0;
-                lbm.velocity[n].y = 0.0;
-                return;
-            }
+//         // Inlet condition
+//         if x == 0 {
+//             lbm.flags[n] = FLAG_EQ;
+//             lbm.velocity[n].x = u0;
+//             lbm.velocity[n].y = 0.0;
+//             lbm.density[n] = 1.0;
+//         }
+//         // Outlet condition
+//         else if x == nx - 1 {
+//             lbm.flags[n] = FLAG_EQ;
+//             lbm.velocity[n].x = u0;
+//             lbm.velocity[n].y = 0.0;
+//             lbm.density[n] = 1.0;
+//         }
+//         // Top and bottom walls
+//         else if y == 0 || y == ny - 1 {
+//             lbm.flags[n] = FLAG_SOLID;
+//         }
+//         // Fluid region
+//         else {
+//             lbm.flags[n] = FLAG_FLUID;
+//             lbm.velocity[n].x = u0;
+//             lbm.velocity[n].y = 0.0;
+//             lbm.density[n] = 1.0;
+//         }
+//     });
 
-            // Vertical jet (top-down)
-            if (x as i32 - beam_center_x as i32).abs() < beam_radius && y > ny / 2 {
-                lbm.flags[n] = FLAG_FLUID;
-                lbm.density[n] = 1.0;
-                lbm.velocity[n].x = 0.0;
-                lbm.velocity[n].y = jet_velocity;
-                return;
-            }
+//     // Configure output
+//     lbm.set_output_vtk(true);
+//     lbm.set_output_interval(200);
 
-            // Else: rest of the domain is fluid
-            lbm.flags[n] = FLAG_FLUID;
-            lbm.density[n] = 1.0;
-            lbm.velocity[n].x = 0.0;
-            lbm.velocity[n].y = 0.0;
-        });
+//     // Run simulation
+//     lbm.run(10000);
+//     lbm.export_to_vtk(&format!("results/airfoil_aoa_{}.vtk", angle_of_attack))
+//         .expect("Failed to write VTK output");
 
-        lbm.run(10000);
-        lbm.export_to_vtk(&format!("results/pile_flow_h{}.vtk", height as i32))
-            .expect("Failed to write VTK output.");
-        let re = jet_velocity.abs() * ny as f32 / viscosity;
-        println!("Height: {}, Reynolds number: {}", height, re);
-    }
-}
+//     let re = u0 * chord_length / viscosity;
+//     println!("Reynolds number: {}", re);
+// } 
+
+// =============================================================================
+
+
+// 3D NACA Airfoil Flow Example
+// fn main() {
+//     let nx = 512;
+//     let ny = 256;
+//     let nz = 128;
+//     let viscosity = 0.01;
+//     let u0 = 0.1; // Inlet velocity
+//     let angle_of_attack = 10.0; // Degrees
+//     let chord_length = nx as f32 * 0.3; // 30% of domain width
+//     let span_length = nz as f32 * 0.8; // 80% of domain depth
+    
+//     // Initialize LBM simulation with D3Q19 model for 3D
+//     let mut lbm = LBM::new(nx, ny, nz, "D3Q19".to_string(), viscosity);
+
+//     // NACA 0012 parameters
+//     let thickness = 0.12; // 12% thickness
+//     let cx = nx as f32 * 0.3; // Position airfoil at 30% from left
+//     let cy = ny as f32 * 0.5; // Center vertically
+//     let cz = nz as f32 * 0.5; // Center in z-direction
+
+//     // Convert angle to radians
+//     let angle_rad = angle_of_attack * std::f32::consts::PI / 180.0;
+
+//     // Set boundary and initial conditions
+//     lbm.set_conditions(|lbm, x, y, z, n| {
+//         let xf = x as f32;
+//         let yf = y as f32;
+//         let zf = z as f32;
+
+//         // Transform coordinates to airfoil reference frame
+//         let dx = xf - cx;
+//         let dy = yf - cy;
+//         let dz = zf - cz;
+        
+//         // Rotate coordinates (around z-axis)
+//         let x_rot = dx * angle_rad.cos() + dy * angle_rad.sin();
+//         let y_rot = -dx * angle_rad.sin() + dy * angle_rad.cos();
+//         let z_rot = dz;
+
+//         // Normalized chord position
+//         let x_c = x_rot / chord_length;
+
+//         // Check if point is within wing span
+//         if x_c >= 0.0 && x_c <= 1.0 && z_rot.abs() <= span_length / 2.0 {
+//             // NACA 0012 formula
+//             let yt = 5.0 * thickness * (0.2969 * x_c.sqrt() - 0.1260 * x_c 
+//                 - 0.3516 * x_c.powi(2) + 0.2843 * x_c.powi(3) 
+//                 - 0.1015 * x_c.powi(4));
+            
+//             let y_upper = y_rot - yt * chord_length;
+//             let y_lower = y_rot + yt * chord_length;
+
+//             // Check if point is inside airfoil
+//             if y_rot >= y_lower && y_rot <= y_upper {
+//                 lbm.flags[n] = FLAG_SOLID;
+//                 return;
+//             }
+//         }
+
+//         // Inlet condition
+//         if x == 0 {
+//             lbm.flags[n] = FLAG_EQ;
+//             lbm.velocity[n].x = u0;
+//             lbm.velocity[n].y = 0.0;
+//             lbm.velocity[n].z = 0.0;
+//             lbm.density[n] = 1.0;
+//         }
+//         // Outlet condition
+//         else if x == nx - 1 {
+//             lbm.flags[n] = FLAG_EQ;
+//             lbm.velocity[n].x = u0;
+//             lbm.velocity[n].y = 0.0;
+//             lbm.velocity[n].z = 0.0;
+//             lbm.density[n] = 1.0;
+//         }
+//         // Top and bottom walls
+//         else if y == 0 || y == ny - 1 {
+//             lbm.flags[n] = FLAG_SOLID;
+//         }
+//         // Front and back walls
+//         else if z == 0 || z == nz - 1 {
+//             lbm.flags[n] = FLAG_SOLID;
+//         }
+//         // Fluid region
+//         else {
+//             lbm.flags[n] = FLAG_FLUID;
+//             lbm.velocity[n].x = u0;
+//             lbm.velocity[n].y = 0.0;
+//             lbm.velocity[n].z = 0.0;
+//             lbm.density[n] = 1.0;
+//         }
+//     });
+
+//     // Configure output
+//     lbm.set_output_vtk(true);
+//     lbm.set_output_interval(200);
+
+//     // Run simulation
+//     lbm.run(10000);
+//     lbm.export_to_vtk(&format!("results/airfoil3d_aoa_{}.vtk", angle_of_attack))
+//         .expect("Failed to write VTK output");
+
+//     let re = u0 * chord_length / viscosity;
+//     println!("Reynolds number: {}", re);
+// }
