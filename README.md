@@ -12,14 +12,12 @@
 The library is **Open Source**, and contributions are highly encouraged. Whether you're an academic researcher or just curious about fluid dynamics, you're welcome to contribute!  
 
 ## Current State and road map
-**CappuSim** is currently in **alpha** and appears **functional**, but no yet validated. A validated **beta version** will be available soon. Stay tuned!
+**CappuSim** is currently in **beta** and is **functional**, but no yet formally validated. Stay tuned!
 
 The possibilities for the future include:
 - Temperature
 - Forces
-- Improve kernels handling
 - GUI
-- Python interface
 - Multiphase fluid
 - Moving boundaries
 - Plasma extension
