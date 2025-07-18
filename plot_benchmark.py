@@ -2,10 +2,13 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Load CSV efficiently
-df = pd.read_csv('benchmarks/benchmark_results_1752848558.csv')
+df = pd.read_csv('benchmarks/benchmark_results_1752852185.csv')
 
 # Preview data
 print("Columns:", df.columns.tolist())
+
+# Get GPU name for title
+gpu_name = df['DeviceName'].iloc[0] if not df.empty else "Unknown GPU"
 
 # Create MLUps vs Grid Size plot with lines for each model
 plt.figure(figsize=(12, 8))
@@ -33,7 +36,7 @@ for i, model in enumerate(models):
 
 plt.xlabel('Grid Size (Number of Cells)', fontsize=12)
 plt.ylabel('Performance (MLUps)', fontsize=12)
-plt.title('LBM Performance: MLUps vs Grid Size by Model', fontsize=14, fontweight='bold')
+plt.title(f'LBM Performance: MLUps vs Grid Size by Model\n{gpu_name}', fontsize=14, fontweight='bold')
 plt.grid(True, alpha=0.3)
 plt.legend(fontsize=10)
 plt.xscale('log')  # Log scale for better visualization of grid sizes
