@@ -8,21 +8,13 @@ mod solver;
 mod utils;
 use solver::flags::{FLAG_EQ, FLAG_FLUID, FLAG_SOLID};
 use solver::lbm::LBM;
+use solver::benchmark;
 
 // =============================================================================
-// Benchmark Example
+// Comprehensive Benchmark Suite
 fn main() {
-    let nx = 128;
-    let ny = 128;
-    let nz = 128;
-    let viscosity = 0.1;
-    let time_steps = 50;
-
-    // Initialize LBM simulation
-    let mut lbm = LBM::new(nx, ny, nz, "D3Q19".to_string(), viscosity);
-
-    // Run the simulation
-    lbm.run(time_steps);
+    // Run comprehensive benchmark across all models and grid sizes
+    LBM::benchmark();
 }
 
 // =============================================================================

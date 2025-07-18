@@ -21,7 +21,7 @@ impl LBM {
             return Err(format!("Unsupported model: {}.", self.model).into());
         }
 
-        // Check if D2Q9 model is used with Nz != 0
+        // Check if D2Q9 model is used with Nz != 1
         if self.model == "D2Q9" && self.Nz != 1 {
             self.found_errors = true;
             return Err("D2Q9 model should have Nz equal to 1.".into());

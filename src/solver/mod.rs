@@ -7,3 +7,4 @@ pub mod opencl;
 pub mod output;
 pub mod run;
 pub mod transforms;
+pub mod benchmark;

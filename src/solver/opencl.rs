@@ -5,6 +5,7 @@ use super::lbm::LBM;
 use crate::utils::terminal_utils;
 use ocl::{flags::MEM_READ_WRITE, Buffer, Context, Device, Kernel, Platform, Program, Queue};
 use std::error::Error;
+use std::mem::size_of;
 
 impl LBM {
     pub fn get_ocl_platform(&mut self) -> Result<Platform, Box<dyn Error>> {
@@ -108,38 +109,7 @@ impl LBM {
     }
 
     pub fn get_optimal_work_group_size(&self) -> Result<usize, Box<dyn Error>> {
-        let device = self.device.as_ref().unwrap();
-        
-        // Get maximum work group size
-        let max_work_group_size = match device.info(ocl::enums::DeviceInfo::MaxWorkGroupSize)? {
-            ocl::enums::DeviceInfoResult::MaxWorkGroupSize(size) => size,
-            _ => return Err("Failed to get max work group size".into()),
-        };
-        
-        // Get preferred work group size multiple
-        let preferred_multiple = match device.info(ocl::enums::DeviceInfo::MaxWorkGroupSize)? {
-            ocl::enums::DeviceInfoResult::MaxWorkGroupSize(size) => size,
-            _ => return Err("Failed to get preferred work group size multiple".into()),
-        };
-        
-        // Calculate optimal work group size based on model
-        let mut optimal_size = match self.model.as_str() {
-            "D2Q9" => 256,    // 2D model, moderate Q
-            "D3Q7" => 512,    // 3D model, small Q
-            "D3Q15" => 256,   // 3D model, moderate Q
-            "D3Q19" => 128,   // 3D model, large Q
-            "D3Q27" => 64,    // 3D model, very large Q
-            _ => 256,         // default
-        };
-        
-        // Adjust to be within device limits and a multiple of preferred multiple
-        optimal_size = optimal_size.min(max_work_group_size);
-        optimal_size = (optimal_size / preferred_multiple) * preferred_multiple;
-        
-        // Ensure it's not too small
-        optimal_size = optimal_size.max(32);
-        
-        Ok(optimal_size)
+        Ok(64)
     }
 
     pub fn create_streaming_kernel(&mut self) -> Result<(), Box<dyn Error>> {
