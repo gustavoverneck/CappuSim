@@ -1,25 +1,24 @@
 import React from 'react';
-import logo from './logo.svg';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import Layout from './components/Layout';
+import Home from './pages/Home';
+import UsageGuide from './pages/UsageGuide';
+import LBMTheory from './pages/LBMTheory';
+import Documentation from './pages/Documentation';
 import './App.css';
 
 function App() {
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.tsx</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
+    <Router basename="/CappuSim">
+      <Layout>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/usage-guide" element={<UsageGuide />} />
+          <Route path="/lbm-theory" element={<LBMTheory />} />
+          <Route path="/documentation" element={<Documentation />} />
+        </Routes>
+      </Layout>
+    </Router>
   );
 }
 
