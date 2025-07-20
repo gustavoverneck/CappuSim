@@ -1,0 +1,15 @@
+{
+  "files": {
+    "main.css": "/CappuSim/static/css/main.f855e6bc.css",
+    "main.js": "/CappuSim/static/js/main.68bb097b.js",
+    "static/js/453.685ffbef.chunk.js": "/CappuSim/static/js/453.685ffbef.chunk.js",
+    "index.html": "/CappuSim/index.html",
+    "main.f855e6bc.css.map": "/CappuSim/static/css/main.f855e6bc.css.map",
+    "main.68bb097b.js.map": "/CappuSim/static/js/main.68bb097b.js.map",
+    "453.685ffbef.chunk.js.map": "/CappuSim/static/js/453.685ffbef.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.f855e6bc.css",
+    "static/js/main.68bb097b.js"
+  ]
+}
