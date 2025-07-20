@@ -9,7 +9,7 @@ const UsageGuide = () => {
         <h2>Installation</h2>
         <ol>
           <li>Clone the repository:
-            <pre><code>git clone https://github.com/yourusername/CappuSim.git</code></pre>
+            <pre><code>git clone https://github.com/gustavoverneck/CappuSim.git</code></pre>
           </li>
           <li>Install Rust and Cargo</li>
           <li>Install OpenCL drivers for your GPU</li>
