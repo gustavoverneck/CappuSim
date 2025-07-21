@@ -1,6 +1,8 @@
 import React from 'react';
+import { FaGithub } from "react-icons/fa";
 
 const Header = () => {
+
   return (
     <header className="header">
       <div className="container">
@@ -9,7 +11,8 @@ const Header = () => {
           <span className="tagline">GPU-Accelerated LBM Framework</span>
         </div>
         <div className="header-links">
-          <a href="https://github.com/gustavoverneck/CappuSim" target="_blank" rel="noopener noreferrer">
+          <a href="https://github.com/gustavoverneck/CappuSim" target="_blank" rel="noopener noreferrer" style={{ color: "white", display: "flex", alignItems: "center", gap: "6px" }}>
+            <FaGithub size={20} />
             GitHub
           </a>
         </div>
