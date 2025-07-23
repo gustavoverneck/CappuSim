@@ -53,6 +53,7 @@ Contributions are welcome! If you want to contribute:
 5. Open a pull request
 
 ## Performance Results
-| Device                         | D2Q9   | D3Q7   | D3Q15  | D3Q19  | D3Q27  |
-|--------------------------------|--------|--------|--------|--------|--------|
-| RTX 3050 6GB Laptop GPU        | 1506.3 | 1659.0 | 929.6  | 753.3  | 548.4  |
+| Vendor      | Device                         | D2Q9   | D3Q7   | D3Q15  | D3Q19  | D3Q27  |
+|:----------: |-------------------------------|--------|--------|--------|--------|--------|
+| 🟩 NVIDIA   | RTX 3050 6GB Laptop GPU        | 1506.3 | 1659.0 | 929.6  | 753.3  | 548.4  |
+<!-- Vendor legend: 🟩 NVIDIA (green), 🟦 Intel (blue), 🟥 AMD (red) -->
