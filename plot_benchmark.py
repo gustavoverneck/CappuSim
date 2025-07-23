@@ -4,7 +4,7 @@ import matplotlib.ticker as mticker
 import numpy as np
 
 # Update
-benchmark_file = "benchmark_results_1753274499.csv"
+benchmark_file = "benchmark_results_1753283824.csv"
 max_bandwidth_GBs = 168  # Ex.: RTX 3050 Laptop GPU (168 GB/s)
 
 
