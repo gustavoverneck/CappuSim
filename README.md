@@ -55,7 +55,7 @@ Contributions are welcome! If you want to contribute:
 ## Performance Results
 ```mermaid
 gantt
-    title CappuSim Performance [peak MLUPs/s] - FP32 (RTX 3050 6GB Laptop GPU)
+    title CappuSim Performance [avg MLUPs] - FP32
     dateFormat  X
     axisFormat  %s
     %%{
@@ -82,10 +82,10 @@ gantt
             }
         }
     }%%
-    section NVIDIA GeForce RTX 3050 6GB Laptop GPU
-        D2Q9  1506.34 :done, 0, 1506.34
-        D3Q7  1659.04 :done, 0, 1659.04
-        D3Q15 929.60  :done, 0, 929.60
-        D3Q19 753.32  :done, 0, 753.32
-        D3Q27 548.42  :done, 0, 548.42
+    section RTX 3050 6GB Laptop GPU
+        D2Q9   :done, 0, 1506.34
+        D3Q7   :done, 0, 1659.04
+        D3Q15  :done, 0, 929.60
+        D3Q19  :done, 0, 753.32
+        D3Q27  :done, 0, 548.42
 ```
