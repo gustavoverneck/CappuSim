@@ -53,6 +53,15 @@ Contributions are welcome! If you want to contribute:
 5. Open a pull request
 
 ## Performance Results
+
+The table below shows the **peak performance** of CappuSim for different Lattice Boltzmann velocity models (D2Q9, D3Q7, D3Q15, D3Q19, D3Q27) on various hardware devices.  
+- **Vendor**: Manufacturer of the GPU (🟩 NVIDIA, 🟦 Intel, 🟥 AMD).
+- **Device**: The tested GPU model.
+- Each model column shows the maximum measured performance in average **MLUPs** (Million Lattice Updates per Second).
+
+**How it’s measured:**  
+Performance is measured by running benchmark simulations for each velocity model on the listed device, recording the highest MLUPs/s achieved during the tests. This metric reflects how many million lattice sites the device can update per second, providing a direct comparison of computational throughput for different hardware and models.
+
 | Vendor      | Device                         | D2Q9   | D3Q7   | D3Q15  | D3Q19  | D3Q27  |
 |:----------: |-------------------------------|--------|--------|--------|--------|--------|
 | 🟩 NVIDIA   | RTX 3050 6GB Laptop GPU        | 1506.3 | 1659.0 | 929.6  | 753.3  | 548.4  |
