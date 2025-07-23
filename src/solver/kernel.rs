@@ -5,9 +5,10 @@ use super::lbm::LBM;
 use std::error::Error;
 
 pub const KERNEL_EQUILIBRIUM_SRC: &str = include_str!("../kernels/kernel_equilibrium.cl");
-pub const KERNEL_STREAMING_SRC: &str = include_str!("../kernels/kernel_streaming.cl");
-pub const KERNEL_COLLISION_SRC: &str = include_str!("../kernels/kernel_collision.cl");
+//pub const KERNEL_STREAMING_SRC: &str = include_str!("../kernels/kernel_streaming.cl");
+//pub const KERNEL_COLLISION_SRC: &str = include_str!("../kernels/kernel_collision.cl");
 pub const KERNEL_VELOCITY_SETS_SRC: &str = include_str!("../kernels/kernel_velocity_sets.cl");
+pub const KERNEL_STREAM_COLLIDE_SRC: &str = include_str!("../kernels/kernel_stream_collide.cl");
 
 impl LBM {
     pub fn generate_custom_kernel(&mut self) -> Result<String, Box<dyn Error>> {
@@ -25,7 +26,6 @@ impl LBM {
         {}
         {}
         {}
-        {}
         "#,
             self.Nx,
             self.Ny,
@@ -34,8 +34,7 @@ impl LBM {
             self.Q,
             self.model.as_str(),
             KERNEL_VELOCITY_SETS_SRC,
-            KERNEL_STREAMING_SRC,
-            KERNEL_COLLISION_SRC,
+            KERNEL_STREAM_COLLIDE_SRC,
             KERNEL_EQUILIBRIUM_SRC,
         );
         Ok(kernel_source)

@@ -44,8 +44,9 @@ impl LBM {
             context: None,
             queue: None,
             program: None,
-            streaming_kernel: None,
-            collision_kernel: None,
+            // streaming_kernel: None,
+            // collision_kernel: None,
+            stream_collide_kernel: None,
             equilibrium_kernel: None,
             found_errors: false,
             output_interval: 0,
@@ -90,14 +91,17 @@ impl LBM {
                 .expect("Failed to reserve flags_buffer."),
         );
 
-        self.create_collision_kernel()
-        .expect("Failed to create 'streaming kernel'.");
+        // self.create_collision_kernel()
+        // .expect("Failed to create 'streaming kernel'.");
         
-        self.create_streaming_kernel()
-            .expect("Failed to create 'streaming kernel'.");
+        // self.create_streaming_kernel()
+        //     .expect("Failed to create 'streaming kernel'.");
         
         self.create_equilibrium_kernel()
             .expect("Failed to create 'equilibrium kernel'.");
+
+        self.create_stream_collide_kernel()
+            .expect("Failed to create 'stream_collide' kernel.");
 
         self.calculate_vram_usage();
     }

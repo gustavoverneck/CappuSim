@@ -168,29 +168,14 @@ impl LBM {
                 .expect("Queue finish failed");
         }
         
-        // Main simulation loop (simplified version of run method)
+        // Main simulation loop (fused stream-collide kernel)
         for t in 0..config.time_steps {
-            // Collision
             unsafe {
-                let kernel = lbm.collision_kernel.as_ref().unwrap();
+                let kernel = lbm.stream_collide_kernel.as_ref().unwrap();
                 kernel.set_arg(6, &(t as i32))
                     .expect("Failed to set kernel argument");
                 kernel.enq()
-                    .expect("Failed to enqueue collision kernel");
-                lbm.queue
-                    .as_ref()
-                    .unwrap()
-                    .finish()
-                    .expect("Queue finish failed");
-            }
-            
-            // Streaming
-            unsafe {
-                let kernel = lbm.streaming_kernel.as_ref().unwrap();
-                kernel.set_arg(3, &(t as i32))
-                    .expect("Failed to set kernel argument");
-                kernel.enq()
-                    .expect("Failed to enqueue streaming kernel");
+                    .expect("Failed to enqueue stream-collide kernel");
                 lbm.queue
                     .as_ref()
                     .unwrap()
