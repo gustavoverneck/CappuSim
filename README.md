@@ -53,39 +53,6 @@ Contributions are welcome! If you want to contribute:
 5. Open a pull request
 
 ## Performance Results
-```mermaid
-gantt
-    title CappuSim Performance [avg MLUPs] - FP32
-    dateFormat  X
-    axisFormat  %s
-    %%{
-        init: {
-            "gantt": {
-                'titleTopMargin': 42,
-                'topPadding': 70,
-                'leftPadding': 260,
-                'rightPadding': 5,
-                'sectionFontSize': 20,
-                'fontSize': 20,
-                'barHeight': 20,
-                'barGap': 3,
-                'numberSectionStyles': 2
-            },
-            'theme': 'forest',
-            'themeVariables': {
-                'sectionBkgColor': '#99999999',
-                'altSectionBkgColor': '#00000000',
-                'titleColor': '#AFAFAF',
-                'textColor': '#AFAFAF',
-                'taskTextColor': 'black',
-                'taskBorderColor': '#487E3A'
-            }
-        }
-    }%%
-    section RTX 3050 6GB Laptop GPU
-        D2Q9   :done, 0, 1506.34
-        D3Q7   :done, 0, 1659.04
-        D3Q15  :done, 0, 929.60
-        D3Q19  :done, 0, 753.32
-        D3Q27  :done, 0, 548.42
-```
+| Device                         | D2Q9   | D3Q7   | D3Q15  | D3Q19  | D3Q27  |
+|--------------------------------|--------|--------|--------|--------|--------|
+| RTX 3050 6GB Laptop GPU        | 1506.3 | 1659.0 | 929.6  | 753.3  | 548.4  |
