@@ -22,6 +22,7 @@ pub struct BenchmarkResult {
     pub max_work_group_size: usize,
     pub global_memory_gb: f64,
     pub local_memory_kb: f64,
+    pub cell_memory_bytes: f64, // Add this line
 }
 
 #[derive(Debug, Clone)]
@@ -98,7 +99,7 @@ impl LBM {
             configs.push(BenchmarkConfig {
                 model: "D2Q9".to_string(),
                 nx, ny, nz,
-                time_steps: 1000,
+                time_steps: 500,
                 viscosity: 0.1,
             });
         }
@@ -118,7 +119,7 @@ impl LBM {
                 configs.push(BenchmarkConfig {
                     model: model.to_string(),
                     nx: *nx, ny: *ny, nz: *nz,
-                    time_steps: 500, // Fewer timesteps for 3D due to computational cost
+                    time_steps: 250, // Fewer timesteps for 3D due to computational cost
                     viscosity: 0.1,
                 });
             }
@@ -204,6 +205,14 @@ impl LBM {
         // Calculate MLUps
         let mlups = (lbm.N as f64 * config.time_steps as f64) / elapsed_seconds / 1_000_000.0;
         
+        // Calculate cell memory usage
+        let cell_memory_bytes = (
+            lbm.Q * 2 * 4 + // f and f_new: Q floats each, 4 bytes per float
+            1 * 4 +         // density: 1 float
+            3 * 4 +         // velocity: 3 floats
+            1 * 4           // flags: 1 i32
+        ) as f64;
+        
         Ok(BenchmarkResult {
             model: config.model.clone(),
             nx: config.nx,
@@ -220,6 +229,7 @@ impl LBM {
             max_work_group_size: device_info.max_work_group_size,
             global_memory_gb: device_info.global_memory_gb,
             local_memory_kb: device_info.local_memory_kb,
+            cell_memory_bytes,
         })
     }
     
@@ -268,13 +278,31 @@ impl LBM {
         let bytes_per_f32 = 4;
         let bytes_per_i32 = 4;
         
-        let f_memory = lbm.N * lbm.Q * bytes_per_f32 * 2; // f and f_new buffers
-        let density_memory = lbm.N * bytes_per_f32;
-        let velocity_memory = lbm.N * 3 * bytes_per_f32;
-        let flags_memory = lbm.N * bytes_per_i32;
+        let cell_memory_bytes = (
+            lbm.Q * 2 * bytes_per_f32 + // f and f_new: Q floats each, 4 bytes per float
+            1 * bytes_per_f32 +         // density: 1 float
+            3 * bytes_per_f32 +         // velocity: 3 floats
+            1 * bytes_per_i32           // flags: 1 i32
+        ) as f64;
         
-        let total_bytes = f_memory + density_memory + velocity_memory + flags_memory;
-        total_bytes as f64 / (1024.0 * 1024.0) // Convert to MB
+        let total_bytes = lbm.N as f64 * cell_memory_bytes;
+        total_bytes / (1024.0 * 1024.0) // Convert to MB
+    }
+    
+    /// Calculates memory usage per cell in bytes
+    fn calculate_cell_memory_usage(lbm: &LBM) -> f64 {
+        let bytes_per_f32 = 4;
+        let bytes_per_i32 = 4;
+        
+        // Memory usage for one cell (density, velocity, flags, and Q distributions)
+        let cell_memory_bytes = (
+            1 * bytes_per_f32 +     // density
+            3 * bytes_per_f32 +     // velocity
+            1 * bytes_per_i32 +     // flags
+            lbm.Q * 2 * bytes_per_f32 // f and f_new
+        ) as f64;
+        
+        cell_memory_bytes
     }
     
     /// Prints result for a single benchmark
@@ -307,11 +335,11 @@ impl LBM {
         let mut file = File::create(&filename)?;
         
         // Write CSV header
-        writeln!(file, "Model,Nx,Ny,Nz,GridSize,TimeSteps,ElapsedTime,MLUps,MemoryUsageMB,DeviceName,PlatformName,ComputeUnits,MaxWorkGroupSize,GlobalMemoryGB,LocalMemoryKB")?;
+        writeln!(file, "Model,Nx,Ny,Nz,GridSize,TimeSteps,ElapsedTime,MLUps,MemoryUsageMB,CellMemoryBytes,DeviceName,PlatformName,ComputeUnits,MaxWorkGroupSize,GlobalMemoryGB,LocalMemoryKB")?;
         
         // Write data rows
         for result in results {
-            writeln!(file, "{},{},{},{},{},{},{:.6},{:.6},{:.2},{},{},{},{},{:.2},{:.1}",
+            writeln!(file, "{},{},{},{},{},{},{:.6},{:.6},{:.2},{:.2},{},{},{},{},{:.2},{:.1}",
                 result.model,
                 result.nx,
                 result.ny, 
@@ -321,6 +349,7 @@ impl LBM {
                 result.elapsed_time,
                 result.mlups,
                 result.memory_usage_mb,
+                result.cell_memory_bytes, // Add here
                 result.device_name,
                 result.platform_name,
                 result.compute_units,

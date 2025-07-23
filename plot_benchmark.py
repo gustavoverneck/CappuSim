@@ -3,8 +3,14 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import numpy as np
 
+# Update
+benchmark_file = "benchmark_results_1753273000.csv"
+max_bandwidth_GBs = 168  # Ex.: RTX 3050 Laptop GPU (168 GB/s)
+
+
+# ----------------------------------------------------------------
 # Load CSV efficiently
-df = pd.read_csv('benchmarks/benchmark_results_1752852185.csv')
+df = pd.read_csv(f'benchmarks/{benchmark_file}')
 
 # Preview data
 print("Columns:", df.columns.tolist())
@@ -16,15 +22,11 @@ gpu_name = df['DeviceName'].iloc[0] if not df.empty else "Unknown GPU"
 gpu_name_safe = gpu_name.replace(' ', '_').replace('/', '_')
 
 # --- New Calculation: Bandwidth in GB/s ---
-Q_dict = {'D2Q9': 9, 'D3Q7': 7, 'D3Q15': 15, 'D3Q19': 19, 'D3Q27': 27}
-bytes_per_value = 4  # float32
-rw = 2  # read + write
+df['Bandwidth_GBs'] = (
+    df['MLUps'] * 1_000_000 * df['CellMemoryBytes'] / 1_000_000_000
+)
 
-df['Bandwidth_GBs'] = [
-    mlups * 1_000_000 * Q_dict[model] * bytes_per_value * rw / 1_000_000_000
-    for mlups, model in zip(df['MLUps'], df['Model'])
-]
-
+df['Efficiency'] = df['Bandwidth_GBs'] / max_bandwidth_GBs
 
 # Create MLUps vs Grid Size plot with lines for each model
 plt.figure(figsize=(12, 8))
@@ -97,8 +99,6 @@ plt.savefig(f'benchmarks/memory_vs_gridsize_{gpu_name_safe}.png')
 plt.show()
 
 # --- New Plot: Real vs Theoretical Bandwidth (GB/s) as Bar Plot ---
-max_bandwidth_GBs = 168  # RTX 3050 Laptop GPU (168 GB/s)
-
 plt.figure(figsize=(14, 8))
 
 all_grids = sorted(df['GridSize'].unique())
@@ -115,7 +115,7 @@ for i, model in enumerate(models):
     for rect, row in zip(bars, model_data.itertuples()):
         eff = row.Bandwidth_GBs / max_bandwidth_GBs
         plt.text(rect.get_x() + rect.get_width()/2, rect.get_height() + 2, f'{eff:.2f}x',
-                 ha='center', va='bottom', fontsize=8, color=colors[i])
+                ha='center', va='bottom', fontsize=8, color=colors[i])
 
 # Plot a single horizontal line for the theoretical bandwidth
 plt.axhline(max_bandwidth_GBs, color='black', linestyle='--', linewidth=2, label='Theoretical Max')
