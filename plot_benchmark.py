@@ -1,5 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
+import numpy as np
 
 # Load CSV efficiently
 df = pd.read_csv('benchmarks/benchmark_results_1752852185.csv')
@@ -12,6 +14,17 @@ gpu_name = df['DeviceName'].iloc[0] if not df.empty else "Unknown GPU"
 
 # Clean GPU name for filename (remove spaces and special characters)
 gpu_name_safe = gpu_name.replace(' ', '_').replace('/', '_')
+
+# --- New Calculation: Bandwidth in GB/s ---
+Q_dict = {'D2Q9': 9, 'D3Q7': 7, 'D3Q15': 15, 'D3Q19': 19, 'D3Q27': 27}
+bytes_per_value = 4  # float32
+rw = 2  # read + write
+
+df['Bandwidth_GBs'] = [
+    mlups * 1_000_000 * Q_dict[model] * bytes_per_value * rw / 1_000_000_000
+    for mlups, model in zip(df['MLUps'], df['Model'])
+]
+
 
 # Create MLUps vs Grid Size plot with lines for each model
 plt.figure(figsize=(12, 8))
@@ -26,7 +39,7 @@ for i, model in enumerate(models):
              marker='o', linewidth=2, markersize=8, 
              label=model, color=colors[i])
     
-    # Add performance annotations to each point
+    #Add performance annotations to each point
     for _, row in model_data.iterrows():
         plt.annotate(f'{row["MLUps"]:.1f}', 
                     (row['GridSize'], row['MLUps']),
@@ -58,10 +71,9 @@ plt.figure(figsize=(12, 8))
 
 for i, model in enumerate(models):
     model_data = df[df['Model'] == model].sort_values('GridSize')
-    plt.plot(model_data['GridSize'], model_data['MemoryUsageMB'], 
-             marker='s', linewidth=2, markersize=8, 
+    plt.plot(model_data['GridSize'], model_data['MemoryUsageMB'],
+             marker='s', linewidth=2, markersize=8,
              label=model, color=colors[i])
-    
     # Annotate memory usage at each point
     # for _, row in model_data.iterrows():
     #     plt.annotate(f'{row["MemoryUsageMB"]:.0f}MB',
@@ -78,15 +90,42 @@ plt.ylabel('Memory Usage (MB)', fontsize=12)
 plt.title(f'LBM Memory Usage: MB vs Grid Size by Model\n{gpu_name}', fontsize=14, fontweight='bold')
 plt.grid(True, alpha=0.3)
 plt.legend(fontsize=10)
-plt.xscale('log')
+plt.xscale('log')  # Keep x-axis log for grid size
+plt.gca().yaxis.set_major_formatter(mticker.FormatStrFormatter('%.0f'))  # Integer ticks on y-axis
 plt.tight_layout()
-plt.savefig(f'benchmarks/memory_vs_gridsize_{gpu_name_safe}.png')  # Save memory usage plot
+plt.savefig(f'benchmarks/memory_vs_gridsize_{gpu_name_safe}.png')
 plt.show()
 
-# Print summary statistics
-print("\nPerformance Summary by Model:")
-for model in models:
-    model_data = df[df['Model'] == model]
-    max_mlups = model_data['MLUps'].max()
-    avg_mlups = model_data['MLUps'].mean()
-    print(f"{model}: Max {max_mlups:.2f} MLUps, Avg {avg_mlups:.2f} MLUps")
+# --- New Plot: Real vs Theoretical Bandwidth (GB/s) as Bar Plot ---
+max_bandwidth_GBs = 168  # RTX 3050 Laptop GPU (168 GB/s)
+
+plt.figure(figsize=(14, 8))
+
+all_grids = sorted(df['GridSize'].unique())
+bar_width = 0.8 / len(models)  # Make bars fit nicely
+index = np.arange(len(all_grids))
+
+# Plot real bandwidth bars for each model
+for i, model in enumerate(models):
+    model_data = df[df['Model'] == model].sort_values('GridSize')
+    grid_indices = [all_grids.index(gs) for gs in model_data['GridSize']]
+    x = index[grid_indices] + (i - (len(models)-1)/2) * bar_width
+    bars = plt.bar(x, model_data['Bandwidth_GBs'], bar_width, label=model, color=colors[i], alpha=0.85)
+    # Annotate efficiency
+    for rect, row in zip(bars, model_data.itertuples()):
+        eff = row.Bandwidth_GBs / max_bandwidth_GBs
+        plt.text(rect.get_x() + rect.get_width()/2, rect.get_height() + 2, f'{eff:.2f}x',
+                 ha='center', va='bottom', fontsize=8, color=colors[i])
+
+# Plot a single horizontal line for the theoretical bandwidth
+plt.axhline(max_bandwidth_GBs, color='black', linestyle='--', linewidth=2, label='Theoretical Max')
+
+plt.xlabel('Grid Size (Number of Cells)', fontsize=12)
+plt.ylabel('Bandwidth (GB/s)', fontsize=12)
+plt.title(f'LBM Real vs Theoretical Bandwidth (GB/s)\n{gpu_name}', fontsize=14, fontweight='bold')
+plt.grid(True, axis='y', alpha=0.3)
+plt.xticks(index, [str(gs) for gs in all_grids], rotation=30)
+plt.legend(fontsize=10)
+plt.tight_layout()
+plt.savefig(f'benchmarks/real_vs_theoretical_bandwidth_{gpu_name_safe}.png')
+plt.show()
