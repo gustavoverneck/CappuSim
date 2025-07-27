@@ -62,7 +62,9 @@ The table below shows the **peak performance** of CappuSim for different Lattice
 **How it’s measured:**  
 Performance is measured by running benchmark simulations for each velocity model on the listed device, recording the highest MLUPs achieved during the tests. This metric reflects how many million lattice sites the device can update per second, providing a direct comparison of computational throughput for different hardware and models.
 
-| Vendor      | Device                         | D2Q9   | D3Q7   | D3Q15  | D3Q19  | D3Q27  |
-|:----------: |-------------------------------|--------|--------|--------|--------|--------|
-| 🟩 NVIDIA   | RTX 3050 6GB Laptop GPU        | 1506.3 | 1659.0 | 929.6  | 753.3  | 548.4  |
+| Vendor      | Device                        | D2Q9   | D3Q7   | D3Q15   | D3Q19   | D3Q27   |
+|:----------: |-------------------------------|--------|--------|---------|---------|---------|
+| 🟩 NVIDIA   | RTX 3070                      | 3731.2 | 3918.4 | 2115.0  | 1730.0 | 1258.4 |
+| 🟩 NVIDIA   | RTX 3050 6GB Laptop           | 1506.3 | 1659.0 | 929.6   | 753.3  | 548.4   |
+| 🟥 AMD      | RX6600XT                      | 1451.5 | 1688.8 | 959.8   | 743.8  | 520.3   |
 <!-- Vendor legend: 🟩 NVIDIA (green), 🟦 Intel (blue), 🟥 AMD (red) -->
