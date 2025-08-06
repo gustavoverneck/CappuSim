@@ -2,10 +2,23 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import numpy as np
+import sys
 
-# Update
-benchmark_file = "benchmark_results_1753286972.csv"
-max_bandwidth_GBs = 256  # Ex.: RTX 3050 Laptop GPU (168 GB/s)
+# Get filename from command line arguments
+if len(sys.argv) > 1:
+    benchmark_file = sys.argv[1]
+    print(f"Using provided file: {benchmark_file}")
+else:
+    benchmark_file = "benchmark_results_1754441146.csv"
+    print(f"Using default file: {benchmark_file}")
+
+# Get max bandwidth from command line (optional)
+if len(sys.argv) > 2:
+    max_bandwidth_GBs = float(sys.argv[2])
+    print(f"Using provided max bandwidth: {max_bandwidth_GBs} GB/s")
+else:
+    max_bandwidth_GBs = 256
+    print(f"Using default max bandwidth: {max_bandwidth_GBs} GB/s")
 
 
 # ----------------------------------------------------------------

@@ -22,7 +22,7 @@ pub struct BenchmarkResult {
     pub max_work_group_size: usize,
     pub global_memory_gb: f64,
     pub local_memory_kb: f64,
-    pub cell_memory_bytes: f64, // Add this line
+    pub cell_memory_bytes: f64,
 }
 
 #[derive(Debug, Clone)]
@@ -119,7 +119,7 @@ impl LBM {
                 configs.push(BenchmarkConfig {
                     model: model.to_string(),
                     nx: *nx, ny: *ny, nz: *nz,
-                    time_steps: 250, // Fewer timesteps for 3D due to computational cost
+                    time_steps: 250,
                     viscosity: 0.1,
                 });
             }
@@ -334,7 +334,7 @@ impl LBM {
                 result.elapsed_time,
                 result.mlups,
                 result.memory_usage_mb,
-                result.cell_memory_bytes, // Add here
+                result.cell_memory_bytes,
                 result.device_name,
                 result.platform_name,
                 result.compute_units,

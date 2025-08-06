@@ -164,7 +164,7 @@ impl LBM {
                 .name("stream_collide_kernel")
                 .queue(self.queue.as_ref().unwrap().clone())
                 .global_work_size(self.N)
-                .local_work_size(work_group_size)
+                // .local_work_size(work_group_size)
                 .arg(self.f_buffer.as_ref().unwrap())
                 .arg(self.f_new_buffer.as_ref().unwrap())
                 .arg(self.density_buffer.as_ref().unwrap())
