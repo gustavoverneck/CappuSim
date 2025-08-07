@@ -2,6 +2,7 @@
 #![allow(clippy::upper_case_acronyms)] // Allow uppercase acronyms
 use super::lbm::LBM;
 
+use crate::solver::precision::PrecisionMode;
 use crate::utils::terminal_utils;
 use ocl::{flags::MEM_READ_WRITE, Buffer, Context, Device, Kernel, Platform, Program, Queue};
 use std::error::Error;
@@ -216,17 +217,34 @@ impl LBM {
     }
 
     pub fn calculate_vram_usage(&self) {
-        // Helper to get buffer size in bytes, verifying type size
-        fn buffer_size<T: ocl::OclPrm>(buffer: &Option<Buffer<T>>) -> usize {
-            buffer.as_ref().map_or(0, |b| b.len() * size_of::<T>())
+        // Manual calculation based on precision mode
+        // f, f_new: N*Q, density: N, u: N*3, flags: N
+        let n = self.N;
+        let q = self.Q;
+        let f_bytes;
+        let f_new_bytes;
+        let density_bytes = n * std::mem::size_of::<f32>();
+        let u_bytes = n * 3 * std::mem::size_of::<f32>();
+        let flags_bytes = n * std::mem::size_of::<u8>();
+
+        // Assume self.precision_mode: String or enum ("FP32", "FP16S", "FP16C")
+        let precision = &self.precision_mode;
+        match precision {
+            PrecisionMode::FP32 => {
+                f_bytes = n * q * std::mem::size_of::<f32>();
+                f_new_bytes = n * q * std::mem::size_of::<f32>();
+            },
+            PrecisionMode::FP16S | PrecisionMode::FP16C => {
+                f_bytes = n * q * 2; // half = 2 bytes
+                f_new_bytes = n * q * 2;
+            },
+            _ => {
+                f_bytes = n * q * std::mem::size_of::<f32>();
+                f_new_bytes = n * q * std::mem::size_of::<f32>();
+            }
         }
 
-        let total_vram = 
-            buffer_size(&self.f_buffer) +
-            buffer_size(&self.f_new_buffer) +
-            buffer_size(&self.density_buffer) +
-            buffer_size(&self.u_buffer) +
-            buffer_size(&self.flags_buffer);
+        let total_vram = f_bytes + f_new_bytes + density_bytes + u_bytes + flags_bytes;
 
         println!(
             "VRAM usage: {:.2} MB",

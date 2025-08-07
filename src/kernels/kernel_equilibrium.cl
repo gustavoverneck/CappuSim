@@ -12,9 +12,10 @@ __kernel void equilibrium(
     if (n >= N) return; // Prevent out-of-bounds access
 
     // Retrieve velocity components for the current node
-    float ux = u[n * 3];
-    float uy = u[n * 3 + 1];
-    float uz = u[n * 3 + 2];
+    int offset = n * 3;
+    float ux = u[offset];
+    float uy = u[offset + 1];
+    float uz = u[offset + 2];
     
     // Compute the squared velocity magnitude
     float u2 = ux * ux + uy * uy + uz * uz;

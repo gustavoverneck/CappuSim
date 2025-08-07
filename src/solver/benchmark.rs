@@ -287,23 +287,19 @@ impl LBM {
     
     /// Calculates memory usage per cell in bytes
     fn calculate_cell_memory_usage(lbm: &LBM, precision: &PrecisionMode) -> f64 {
-        let bytes_per_distribution = match precision {
-            PrecisionMode::FP32 => 4,   // 32-bit float
-            PrecisionMode::FP16S => 2,  // 16-bit half
-            PrecisionMode::FP16C => 2,  // 16-bit half
+        let (bytes_per_distribution, bytes_per_f32, bytes_per_uchar) = match precision {
+            PrecisionMode::FP32 => (4, 4, 1),   // 32-bit float, 32-bit float, 8-bit uchar
+            PrecisionMode::FP16S | PrecisionMode::FP16C => (2, 4, 1), // 16-bit half, 32-bit float, 8-bit uchar
         };
-        
-        let bytes_per_f32 = 4;
-        let bytes_per_uchar = 1;
-        
+
         // Memory usage for one cell
         let cell_memory_bytes = (
             1 * bytes_per_f32 +                // density
             3 * bytes_per_f32 +                // velocity
-            1 * bytes_per_uchar +              // flags (changed to uchar)
+            1 * bytes_per_uchar +              // flags (uchar)
             lbm.Q * 2 * bytes_per_distribution // f and f_new (with precision)
         ) as f64;
-        
+
         cell_memory_bytes
     }
     

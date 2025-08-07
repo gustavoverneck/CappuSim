@@ -65,9 +65,10 @@ __kernel void stream_collide_kernel(
     // --- Collision ---
     if (flags[n] == FLAG_EQ) {
         // Use prescribed velocity and density from host
-        ux = u[n * 3 + 0];
-        uy = u[n * 3 + 1];
-        uz = u[n * 3 + 2];
+        int offset = n * 3
+        ux = u[offset + 0];
+        uy = u[offset + 1];
+        uz = u[offset + 2];
         local_rho = rho[n];
         u2 = ux * ux + uy * uy + uz * uz;
         for (int q = 0; q < Q; q++) {
@@ -157,9 +158,10 @@ __kernel void stream_collide_kernel(
     // --- Collision ---
     if (flags[n] == FLAG_EQ) {
         // Use prescribed velocity and density from host
-        ux = u[n * 3 + 0];
-        uy = u[n * 3 + 1];
-        uz = u[n * 3 + 2];
+        int offset = n * 3;
+        ux = u[offset + 0];
+        uy = u[offset + 1];
+        uz = u[offset + 2];
         local_rho = rho[n];
         u2 = ux * ux + uy * uy + uz * uz;
         
@@ -257,9 +259,10 @@ __kernel void stream_collide_kernel(
     // --- Collision ---
     if (flags[n] == FLAG_EQ) {
         // Use prescribed velocity and density from host (convert to float for computation)
-        ux = u[n * 3 + 0];
-        uy = u[n * 3 + 1];
-        uz = u[n * 3 + 2];
+        int offset = n * 3;
+        ux = u[offset + 0];
+        uy = u[offset + 1];
+        uz = u[offset + 2];
         local_rho = rho[n];
         u2 = ux * ux + uy * uy + uz * uz;
         for (int q = 0; q < Q; q++) {
@@ -270,9 +273,10 @@ __kernel void stream_collide_kernel(
     } else {
         // Standard BGK collision for fluid cells
         rho[n] = local_rho;  // Output as float
-        u[n * 3 + 0] = ux;
-        u[n * 3 + 1] = uy;
-        u[n * 3 + 2] = uz;
+        int offset = n * 3;
+        u[offset + 0] = ux;
+        u[offset + 1] = uy;
+        u[offset + 2] = uz;
         for (int q = 0; q < Q; q++) {
             float cu = (float)c[q][0] * ux + (float)c[q][1] * uy + (float)c[q][2] * uz;
             float feq = local_rho * w[q] * (FLOAT_ONE + FLOAT_THREE * cu + FLOAT_FOUR_POINT_FIVE * cu * cu - FLOAT_ONE_POINT_FIVE * u2);
