@@ -5,9 +5,18 @@ use super::lbm::LBM;
 
 use crate::solver::transforms::xyz_from_n;
 use crate::utils::velocity::Velocity;
+use crate::solver::precision::PrecisionMode;
+
 
 impl LBM {
-    pub fn new(Nx: usize, Ny: usize, Nz: usize, model: String, viscosity: f32) -> Self {
+    pub fn new(
+        Nx: usize,
+        Ny: usize,
+        Nz: usize,
+        model: String,
+        viscosity: f32,
+        precision: PrecisionMode,
+    ) -> Self {
         let size = Nx * Ny * Nz;
         let Q = match model.clone().as_str() {
             "D2Q9" => 9,
@@ -16,6 +25,19 @@ impl LBM {
             "D3Q19" => 19,
             "D3Q27" => 27,
             _ => panic!("Unsupported model: {}", model),
+        };
+
+        println!(
+            "Initializing LBM with precision mode: {} - {}",
+            format!("{:?}", precision).to_uppercase(),
+            precision.description()
+        );
+
+        let (f_storage, f_compute_buffer) = match precision {
+            PrecisionMode::FP16S => {
+                (Some(vec![0u16; size * Q]), Some(vec![0.0f32; size * Q]))
+            }
+            _ => (None, None),
         };
 
         LBM {
@@ -28,12 +50,15 @@ impl LBM {
             viscosity,
             omega: 1.0 / (3.0 * viscosity + 0.5),
             time_steps: 0,
+            precision_mode: precision,
             f: vec![0.0; size * Q],
             f_new: vec![0.0; size * Q],
+            f_storage,
+            f_compute_buffer,
             density: vec![1.0; size], // Initialize density to 1.0
             u: vec![0.0; size * 3], // Initialize velocity to zero (size * 3 for 3 components per grid point)
             velocity: vec![Velocity::zero(); size], // Initialize input velocity to zero
-            flags: vec![0; size],   // Initialize flags to 0 (fluid)
+            flags: vec![0u8; size],   // Initialize flags to 0 (fluid)
             f_buffer: None,
             f_new_buffer: None,
             density_buffer: None,
@@ -91,12 +116,6 @@ impl LBM {
                 .expect("Failed to reserve flags_buffer."),
         );
 
-        // self.create_collision_kernel()
-        // .expect("Failed to create 'streaming kernel'.");
-        
-        // self.create_streaming_kernel()
-        //     .expect("Failed to create 'streaming kernel'.");
-        
         self.create_equilibrium_kernel()
             .expect("Failed to create 'equilibrium kernel'.");
 

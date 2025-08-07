@@ -4,6 +4,7 @@
 use crate::solver;
 use solver::flags::{FLAG_EQ, FLAG_FLUID, FLAG_SOLID};
 use solver::lbm::LBM;
+use solver::precision::PrecisionMode; 
 
 // 2D NACA Airfoil Flow Example
 pub fn airfoil_2d_example() {
@@ -16,7 +17,7 @@ pub fn airfoil_2d_example() {
     let chord_length = nx as f32 * 0.3; // 30% of domain width
     
     // Initialize LBM simulation
-    let mut lbm = LBM::new(nx, ny, nz, "D2Q9".to_string(), viscosity);
+    let mut lbm = LBM::new(nx, ny, nz, "D2Q9".to_string(), viscosity, PrecisionMode::FP32);
 
     // NACA 0012 parameters
     let thickness = 0.12; // 12% thickness
@@ -110,7 +111,7 @@ pub fn airfoil_3d_example() {
     let span_length = nz as f32 * 0.8; // 80% of domain depth
     
     // Initialize LBM simulation with D3Q19 model for 3D
-    let mut lbm = LBM::new(nx, ny, nz, "D3Q19".to_string(), viscosity);
+    let mut lbm = LBM::new(nx, ny, nz, "D3Q19".to_string(), viscosity, PrecisionMode::FP32);
 
     // NACA 0012 parameters
     let thickness = 0.12; // 12% thickness

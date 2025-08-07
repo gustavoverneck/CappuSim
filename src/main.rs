@@ -10,6 +10,7 @@ mod examples;
 use solver::flags::{FLAG_EQ, FLAG_FLUID, FLAG_SOLID};
 use solver::lbm::LBM;
 use solver::benchmark;
+use solver::precision::PrecisionMode;
 use examples::{poiseuille, von_karman, taylor_green, liddriven_cavity, airfoil};
 
 use crate::examples::poiseuille::poiseuille_2d_example;

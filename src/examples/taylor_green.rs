@@ -5,6 +5,7 @@
 use crate::solver;
 use solver::flags::{FLAG_EQ, FLAG_FLUID, FLAG_SOLID};
 use solver::lbm::LBM;
+use solver::precision::PrecisionMode; 
 
 // 2D Taylor-Green Vortex Example
 pub fn taylor_green_2d_example() {
@@ -16,7 +17,7 @@ pub fn taylor_green_2d_example() {
     let model = "D2Q9".to_string();
 
     // Initialize LBM simulation
-    let mut lbm = LBM::new(nx, ny, nz, model, viscosity);
+    let mut lbm = LBM::new(nx, ny, nz, model, viscosity, PrecisionMode::FP32);
 
     // Set initial conditions for Taylor-Green vortex
     lbm.set_conditions(|lbm, x, y, _z, n| {

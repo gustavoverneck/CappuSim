@@ -5,6 +5,7 @@ pub mod kernel;
 pub mod lbm;
 pub mod opencl;
 pub mod output;
+pub mod precision;
 pub mod run;
 pub mod transforms;
 pub mod benchmark;

@@ -216,33 +216,17 @@ impl LBM {
     }
 
     pub fn calculate_vram_usage(&self) {
-        // Note: Kernel size is not included in VRAM usage calculation as it cannot be easily determined
-        let mut total_vram = 0;
-
-        // Add size of f buffer
-        if let Some(buffer) = &self.f_buffer {
-            total_vram += buffer.len() * size_of::<f32>();
+        // Helper to get buffer size in bytes, verifying type size
+        fn buffer_size<T: ocl::OclPrm>(buffer: &Option<Buffer<T>>) -> usize {
+            buffer.as_ref().map_or(0, |b| b.len() * size_of::<T>())
         }
 
-        // Add size of f_new buffer
-        if let Some(buffer) = &self.f_new_buffer {
-            total_vram += buffer.len() * size_of::<f32>();
-        }
-
-        // Add size of density buffer
-        if let Some(buffer) = &self.density_buffer {
-            total_vram += buffer.len() * size_of::<f32>();
-        }
-
-        // Add size of velocity buffer
-        if let Some(buffer) = &self.u_buffer {
-            total_vram += buffer.len() * size_of::<f32>();
-        }
-
-        // Add size of flags buffer
-        if let Some(buffer) = &self.flags_buffer {
-            total_vram += buffer.len() * size_of::<u8>();
-        }
+        let total_vram = 
+            buffer_size(&self.f_buffer) +
+            buffer_size(&self.f_new_buffer) +
+            buffer_size(&self.density_buffer) +
+            buffer_size(&self.u_buffer) +
+            buffer_size(&self.flags_buffer);
 
         println!(
             "VRAM usage: {:.2} MB",

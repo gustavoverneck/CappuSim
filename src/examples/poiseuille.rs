@@ -4,6 +4,7 @@
 use crate::solver;
 use solver::flags::{FLAG_EQ, FLAG_FLUID, FLAG_SOLID};
 use solver::lbm::LBM;
+use solver::precision::PrecisionMode; 
 
 pub fn poiseuille_2d_example() {
     let nx = 256;
@@ -15,7 +16,7 @@ pub fn poiseuille_2d_example() {
 //    let output_interval = 19999;
 
     // Initialize LBM simulation
-    let mut lbm = LBM::new(nx, ny, nz, "D2Q9".to_string(), viscosity);
+    let mut lbm = LBM::new(nx, ny, nz, "D2Q9".to_string(), viscosity, PrecisionMode::FP32);
 
     // Set boundary and initial conditions
     lbm.set_conditions(|lbm, x, y, _z, n| {
@@ -62,7 +63,7 @@ pub fn poiseuille_3d_example() {
     let fz = 1e-6; // Small body force in z-direction
 
     // Initialize LBM simulation
-    let mut lbm = LBM::new(nx, ny, nz, "D3Q19".to_string(), viscosity);
+    let mut lbm = LBM::new(nx, ny, nz, "D3Q19".to_string(), viscosity, PrecisionMode::FP32);
 
     // Set boundary and initial conditions
     lbm.set_conditions(|lbm, _x, y, _z, n| {

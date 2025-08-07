@@ -5,6 +5,7 @@
 use crate::solver;
 use solver::flags::{FLAG_EQ, FLAG_FLUID, FLAG_SOLID};
 use solver::lbm::LBM;
+use solver::precision::PrecisionMode; 
 
 // 2D Von-Kármán Vortex Street Example
 pub fn von_karman_vortex_2d_example() {
@@ -14,7 +15,7 @@ pub fn von_karman_vortex_2d_example() {
     let u0 = 0.1;
 
     // Initialize LBM simulation
-    let mut lbm = LBM::new(nx, ny, 1, "D2Q9".to_string(), viscosity);
+    let mut lbm = LBM::new(nx, ny, 1, "D2Q9".to_string(), viscosity, PrecisionMode::FP32);
 
     // Cylinder parameters
     let radius = nx as f32 * 0.08;

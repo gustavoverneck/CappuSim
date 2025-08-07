@@ -4,6 +4,7 @@ use std::fs::File;
 use std::io::Write;
 use std::time::Instant;
 use ocl;
+use crate::solver::precision::PrecisionMode;
 
 #[derive(Debug, Clone)]
 pub struct BenchmarkResult {
@@ -23,6 +24,7 @@ pub struct BenchmarkResult {
     pub global_memory_gb: f64,
     pub local_memory_kb: f64,
     pub cell_memory_bytes: f64,
+    pub precision: String, // Add precision field to result
 }
 
 #[derive(Debug, Clone)]
@@ -50,9 +52,10 @@ impl LBM {
         let total_tests = configs.len();
         println!("Running {} benchmark configurations...\n", total_tests);
         
+        // Update progress display to show precision
         for (i, config) in configs.iter().enumerate() {
-            println!("Progress: [{}/{}] Testing {} {}×{}×{}", 
-                i + 1, total_tests, config.model, config.nx, config.ny, config.nz);
+            println!("Progress: [{}/{}] Testing {} {}×{}×{} ({:?})", 
+                i + 1, total_tests, config.model, config.nx, config.ny, config.nz, config.precision);
             
             match Self::run_single_benchmark(config) {
                 Ok(result) => {
@@ -60,7 +63,7 @@ impl LBM {
                     results.push(result);
                 }
                 Err(e) => {
-                    terminal_utils::print_error(&format!("Failed to run benchmark for {} {}×{}×{}: {}", 
+                    terminal_utils::print_error(&format!("Failed to run benchmark for {} {}x{}x{}: {}", 
                         config.model, config.nx, config.ny, config.nz, e));
                 }
             }
@@ -84,6 +87,7 @@ impl LBM {
     /// Defines all benchmark configurations to test
     fn get_benchmark_configs() -> Vec<BenchmarkConfig> {
         let mut configs = Vec::new();
+        let precision_modes = [PrecisionMode::FP32, PrecisionMode::FP16S, PrecisionMode::FP16C];
         
         // 2D Models (D2Q9)
         let grid_sizes_2d = vec![
@@ -95,13 +99,16 @@ impl LBM {
             (2048, 2048, 1),
         ];
         
-        for (nx, ny, nz) in grid_sizes_2d {
-            configs.push(BenchmarkConfig {
-                model: "D2Q9".to_string(),
-                nx, ny, nz,
-                time_steps: 500,
-                viscosity: 0.1,
-            });
+        for precision in &precision_modes {
+            for &(nx, ny, nz) in &grid_sizes_2d {
+                configs.push(BenchmarkConfig {
+                    model: "D2Q9".to_string(),
+                    nx, ny, nz,
+                    time_steps: 500,
+                    viscosity: 0.1,
+                    precision: precision.clone(),
+                });
+            }
         }
         
         // 3D Models
@@ -114,14 +121,17 @@ impl LBM {
             (256, 256, 256),
         ];
         
-        for model in models_3d {
-            for (nx, ny, nz) in &grid_sizes_3d {
-                configs.push(BenchmarkConfig {
-                    model: model.to_string(),
-                    nx: *nx, ny: *ny, nz: *nz,
-                    time_steps: 250,
-                    viscosity: 0.1,
-                });
+        for precision in &precision_modes {
+            for model in &models_3d {
+                for &(nx, ny, nz) in &grid_sizes_3d {
+                    configs.push(BenchmarkConfig {
+                        model: model.to_string(),
+                        nx, ny, nz,
+                        time_steps: 250,
+                        viscosity: 0.1,
+                        precision: precision.clone(),
+                    });
+                }
             }
         }
         
@@ -130,8 +140,13 @@ impl LBM {
     
     /// Runs a single benchmark configuration
     fn run_single_benchmark(config: &BenchmarkConfig) -> Result<BenchmarkResult, Box<dyn std::error::Error>> {
-        // Create LBM instance
-        let mut lbm = LBM::new(config.nx, config.ny, config.nz, config.model.clone(), config.viscosity);
+        // Create LBM instance with precision mode
+        let mut lbm = LBM::new(
+            config.nx, config.ny, config.nz, 
+            config.model.clone(), 
+            config.viscosity,
+            config.precision.clone()
+        );
         
         // Set simple initial conditions (fluid everywhere)
         lbm.set_conditions(|lbm, _x, _y, _z, n| {
@@ -189,17 +204,13 @@ impl LBM {
         
         // Calculate MLUps
         let mlups = (lbm.N as f64 * config.time_steps as f64) / elapsed_seconds / 1_000_000.0;
-        
+
         // Calculate cell memory usage
-        let cell_memory_bytes = (
-            lbm.Q * 2 * 4 + // f and f_new: Q floats each, 4 bytes per float
-            1 * 4 +         // density: 1 float
-            3 * 4 +         // velocity: 3 floats
-            1 * 4           // flags: 1 i32
-        ) as f64;
+        let cell_memory_bytes = Self::calculate_cell_memory_usage(&lbm, &config.precision);
         
         Ok(BenchmarkResult {
             model: config.model.clone(),
+            precision: format!("{:?}", config.precision),
             nx: config.nx,
             ny: config.ny,
             nz: config.nz,
@@ -275,16 +286,22 @@ impl LBM {
     }
     
     /// Calculates memory usage per cell in bytes
-    fn calculate_cell_memory_usage(lbm: &LBM) -> f64 {
-        let bytes_per_f32 = 4;
-        let bytes_per_i32 = 4;
+    fn calculate_cell_memory_usage(lbm: &LBM, precision: &PrecisionMode) -> f64 {
+        let bytes_per_distribution = match precision {
+            PrecisionMode::FP32 => 4,   // 32-bit float
+            PrecisionMode::FP16S => 2,  // 16-bit half
+            PrecisionMode::FP16C => 2,  // 16-bit half
+        };
         
-        // Memory usage for one cell (density, velocity, flags, and Q distributions)
+        let bytes_per_f32 = 4;
+        let bytes_per_uchar = 1;
+        
+        // Memory usage for one cell
         let cell_memory_bytes = (
-            1 * bytes_per_f32 +     // density
-            3 * bytes_per_f32 +     // velocity
-            1 * bytes_per_i32 +     // flags
-            lbm.Q * 2 * bytes_per_f32 // f and f_new
+            1 * bytes_per_f32 +                // density
+            3 * bytes_per_f32 +                // velocity
+            1 * bytes_per_uchar +              // flags (changed to uchar)
+            lbm.Q * 2 * bytes_per_distribution // f and f_new (with precision)
         ) as f64;
         
         cell_memory_bytes
@@ -320,12 +337,13 @@ impl LBM {
         let mut file = File::create(&filename)?;
         
         // Write CSV header
-        writeln!(file, "Model,Nx,Ny,Nz,GridSize,TimeSteps,ElapsedTime,MLUps,MemoryUsageMB,CellMemoryBytes,DeviceName,PlatformName,ComputeUnits,MaxWorkGroupSize,GlobalMemoryGB,LocalMemoryKB")?;
+        writeln!(file, "Model,Precision,Nx,Ny,Nz,GridSize,TimeSteps,ElapsedTime,MLUps,MemoryUsageMB,CellMemoryBytes,DeviceName,PlatformName,ComputeUnits,MaxWorkGroupSize,GlobalMemoryGB,LocalMemoryKB")?;
         
         // Write data rows
         for result in results {
-            writeln!(file, "{},{},{},{},{},{},{:.6},{:.6},{:.2},{:.2},{},{},{},{},{:.2},{:.1}",
+            writeln!(file, "{},{},{},{},{},{},{},{:.6},{:.6},{:.2},{:.2},{},{},{},{},{:.2},{:.1}",
                 result.model,
+                result.precision,  // Add precision
                 result.nx,
                 result.ny, 
                 result.nz,
@@ -340,7 +358,7 @@ impl LBM {
                 result.compute_units,
                 result.max_work_group_size,
                 result.global_memory_gb,
-                result.local_memory_kb
+                result.local_memory_kb,
             )?;
         }
         
@@ -358,21 +376,23 @@ impl LBM {
         println!("{}", "=".repeat(80));
         
         // Group results by model
-        let mut model_results: std::collections::HashMap<String, Vec<&BenchmarkResult>> = std::collections::HashMap::new();
-        
+        let mut model_prec_results = std::collections::HashMap::new();
+
         for result in results {
-            model_results.entry(result.model.clone()).or_insert_with(Vec::new).push(result);
+            model_prec_results.entry((result.model.clone(), result.precision.clone()))
+                .or_insert_with(Vec::new)
+                .push(result);
         }
-        
-        println!("Performance by model:");
-        for (model, model_res) in &model_results {
-            let max_mlups = model_res.iter().map(|r| r.mlups).fold(0.0f64, f64::max);
-            let avg_mlups = model_res.iter().map(|r| r.mlups).sum::<f64>() / model_res.len() as f64;
+
+        println!("Performance by model and precision:");
+        for ((model, precision), results_group) in &model_prec_results {
+            let max_mlups = results_group.iter().map(|r| r.mlups).fold(0.0f64, f64::max);
+            let avg_mlups = results_group.iter().map(|r| r.mlups).sum::<f64>() / results_group.len() as f64;
             
-            let best = model_res.iter().max_by(|a, b| a.mlups.partial_cmp(&b.mlups).unwrap()).unwrap();
+            let best = results_group.iter().max_by(|a, b| a.mlups.partial_cmp(&b.mlups).unwrap()).unwrap();
             
-            println!("  {}: Max {:.2} MLUps ({}×{}×{}), Avg {:.2} MLUps ({} configs)", 
-                model, max_mlups, best.nx, best.ny, best.nz, avg_mlups, model_res.len());
+            println!("  {} ({}): Max {:.2} MLUps ({}×{}×{}), Avg {:.2} MLUps",
+                model, precision, max_mlups, best.nx, best.ny, best.nz, avg_mlups);
         }
         
         // Overall best
@@ -402,4 +422,5 @@ struct BenchmarkConfig {
     nz: usize,
     time_steps: usize,
     viscosity: f32,
+    precision: PrecisionMode,  // Add precision field
 }
