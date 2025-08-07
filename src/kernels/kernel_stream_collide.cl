@@ -215,10 +215,10 @@ __kernel void stream_collide_kernel(
     
     half omega_h = (half)omega;
 
-    // All computations in half precision
+    // Accumulate macroscopic variables in float for higher accuracy
     half f_pop[Q];
-    half local_rho = 0.0h;
-    half ux = 0.0h, uy = 0.0h, uz = 0.0h;
+    float local_rho = 0.0f;
+    float ux = 0.0f, uy = 0.0f, uz = 0.0f;
 
     // --- Streaming (pull) ---
     for (int q = 0; q < Q; q++) {
@@ -239,48 +239,45 @@ __kernel void stream_collide_kernel(
             f_pop[q] = read_buf[q * N + np];
         }
 
-        // Accumulate for macroscopic variables (in half precision)
-        local_rho += f_pop[q];
-        ux += (half)c[q][0] * f_pop[q];
-        uy += (half)c[q][1] * f_pop[q];
-        uz += (half)c[q][2] * f_pop[q];
+        // Accumulate for macroscopic variables (in float)
+        float f_pop_f = (float)f_pop[q];
+        local_rho += f_pop_f;
+        ux += (float)c[q][0] * f_pop_f;
+        uy += (float)c[q][1] * f_pop_f;
+        uz += (float)c[q][2] * f_pop_f;
     }
 
-    half inv_rho = (local_rho > FLOAT_EPSILON) ? FLOAT_ONE / local_rho : 0.0h;
+    float inv_rho = (local_rho > FLOAT_EPSILON) ? FLOAT_ONE / local_rho : 0.0f;
     ux *= inv_rho;
     uy *= inv_rho;
     uz *= inv_rho;
 
-    half u2 = ux * ux + uy * uy + uz * uz;
+    float u2 = ux * ux + uy * uy + uz * uz;
 
     // --- Collision ---
     if (flags[n] == FLAG_EQ) {
-        // Use prescribed velocity and density from host
-        ux = (half)u[n * 3 + 0];
-        uy = (half)u[n * 3 + 1];
-        uz = (half)u[n * 3 + 2];
-        local_rho = (half)rho[n];
+        // Use prescribed velocity and density from host (convert to float for computation)
+        ux = u[n * 3 + 0];
+        uy = u[n * 3 + 1];
+        uz = u[n * 3 + 2];
+        local_rho = rho[n];
         u2 = ux * ux + uy * uy + uz * uz;
-        
         for (int q = 0; q < Q; q++) {
-            half cu = (half)c[q][0] * ux + (half)c[q][1] * uy + (half)c[q][2] * uz;
-            half feq = local_rho * (half)w[q] * (FLOAT_ONE + FLOAT_THREE * cu + 
-           FLOAT_FOUR_POINT_FIVE * cu * cu - FLOAT_ONE_POINT_FIVE * u2);
-            write_buf[q * N + n] = feq;
+            float cu = (float)c[q][0] * ux + (float)c[q][1] * uy + (float)c[q][2] * uz;
+            float feq = local_rho * w[q] * (FLOAT_ONE + FLOAT_THREE * cu + FLOAT_FOUR_POINT_FIVE * cu * cu - FLOAT_ONE_POINT_FIVE * u2);
+            write_buf[q * N + n] = (half)feq;
         }
     } else {
         // Standard BGK collision for fluid cells
-        rho[n] = (float)local_rho;  // Convert back to float for output
-        u[n * 3 + 0] = (float)ux;
-        u[n * 3 + 1] = (float)uy;
-        u[n * 3 + 2] = (float)uz;
-        
+        rho[n] = local_rho;  // Output as float
+        u[n * 3 + 0] = ux;
+        u[n * 3 + 1] = uy;
+        u[n * 3 + 2] = uz;
         for (int q = 0; q < Q; q++) {
-            half cu = (half)c[q][0] * ux + (half)c[q][1] * uy + (half)c[q][2] * uz;
-            half feq = local_rho * (half)w[q] * (FLOAT_ONE + FLOAT_THREE * cu + 
-           FLOAT_FOUR_POINT_FIVE * cu * cu - FLOAT_ONE_POINT_FIVE * u2);
-            half f_new_val = (1.0h - omega_h) * f_pop[q] + omega_h * feq;
-            write_buf[q * N + n] = f_new_val;
+            float cu = (float)c[q][0] * ux + (float)c[q][1] * uy + (float)c[q][2] * uz;
+            float feq = local_rho * w[q] * (FLOAT_ONE + FLOAT_THREE * cu + FLOAT_FOUR_POINT_FIVE * cu * cu - FLOAT_ONE_POINT_FIVE * u2);
+            float f_new_val = (1.0f - omega) * (float)f_pop[q] + omega * feq;
+            write_buf[q * N + n] = (half)f_new_val;
         }
     }
 }
