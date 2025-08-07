@@ -3,7 +3,7 @@ __kernel void stream_collide_kernel(
     __global float* f_new,    // Output buffer (ping-pong)
     __global float* rho,      // Density array (output)
     __global float* u,        // Velocity array (output)
-    __global int* flags,      // Flag array: FLUID, SOLID, EQ
+    __global uchar* flags,      // Flag array: FLUID, SOLID, EQ
     float omega,              // Relaxation parameter
     int timestep              // Current time step
 ) {
@@ -35,7 +35,7 @@ __kernel void stream_collide_kernel(
         int zp = (z - dz + NZ) % NZ;
 
         int np = zp * (NX * NY) + yp * NX + xp;
-        int neighbor_flag = flags[np];
+        uchar neighbor_flag = flags[np];
 
         if (neighbor_flag == FLAG_SOLID) {
             // Bounce-back

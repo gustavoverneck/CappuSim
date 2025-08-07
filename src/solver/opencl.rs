@@ -97,8 +97,8 @@ impl LBM {
         Ok(u_buffer)
     }
 
-    pub fn reserve_flags_buffer(&mut self) -> Result<Buffer<i32>, Box<dyn Error>> {
-        let flags_buffer = Buffer::<i32>::builder()
+    pub fn reserve_flags_buffer(&mut self) -> Result<Buffer<u8>, Box<dyn Error>> {
+        let flags_buffer = Buffer::<u8>::builder()
             .queue(self.queue.as_ref().unwrap().clone())
             .flags(MEM_READ_WRITE)
             .len(self.N)
@@ -156,7 +156,7 @@ impl LBM {
     // }
 
     pub fn create_stream_collide_kernel(&mut self) -> Result<(), Box<dyn Error>> {
-        let work_group_size = self.get_optimal_work_group_size()?;
+        // let work_group_size = self.get_optimal_work_group_size()?;
 
         self.stream_collide_kernel = Some(
             Kernel::builder()
@@ -241,7 +241,7 @@ impl LBM {
 
         // Add size of flags buffer
         if let Some(buffer) = &self.flags_buffer {
-            total_vram += buffer.len() * size_of::<i32>();
+            total_vram += buffer.len() * size_of::<u8>();
         }
 
         println!(
