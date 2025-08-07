@@ -81,7 +81,7 @@ for i, model in enumerate(models):
             if precision not in precision_seen:
                 precision_handles.append(Line2D([0], [0], color='gray', marker=marker, linestyle='', markersize=10, label=precision))
                 precision_seen.add(precision)
-            # Add performance annotations (only to the largest grid sizes)
+            # Adiciona anotações de performance (apenas para o maior grid)
             max_grid = subset['GridSize'].max()
             for _, row in subset[subset['GridSize'] == max_grid].iterrows():
                 plt.annotate(f'{row["MLUps"]:.1f}', 
@@ -92,14 +92,14 @@ for i, model in enumerate(models):
                             color=color,
                             fontweight='bold')
 
-plt.xlabel('Grid Size (Number of Cells, log scale)', fontsize=12)
+plt.xlabel('Tamanho do Grid (número de células, escala log)', fontsize=12)
 plt.ylabel('Performance (MLUps)', fontsize=12)
-plt.title(f'LBM Performance: MLUps vs Grid Size by Model and Precision\n{gpu_name}', fontsize=14, fontweight='bold')
+plt.title(f'Desempenho LBM: MLUps vs Tamanho do Grid por Modelo e Precisão\n{gpu_name}', fontsize=14, fontweight='bold')
 plt.grid(True, alpha=0.3)
-# Custom legends: stacked vertically (model/color on top, precision/marker below)
-first_legend = plt.legend(handles=model_handles, title='Model (Color)', fontsize=10, title_fontsize=11, loc='upper left', bbox_to_anchor=(0, 1))
+# Legendas customizadas empilhadas (modelo/cor em cima, precisão/marcador embaixo)
+first_legend = plt.legend(handles=model_handles, title='Modelo (Cor)', fontsize=10, title_fontsize=11, loc='upper left', bbox_to_anchor=(0, 1))
 plt.gca().add_artist(first_legend)
-plt.legend(handles=precision_handles, title='Precision (Marker)', fontsize=10, title_fontsize=11, loc='upper left', bbox_to_anchor=(0, 0.78))
+plt.legend(handles=precision_handles, title='Precisão (Marcador)', fontsize=10, title_fontsize=11, loc='upper left', bbox_to_anchor=(0, 0.78))
 plt.xscale('log')
 plt.tight_layout()
 plt.savefig(f'benchmarks/performance_model_precision_{gpu_name_safe}.png')
@@ -136,12 +136,12 @@ for i, precision in enumerate(precision_modes):
             plt.text(x[j] + offset, v + 20, f'{v:.0f}', 
                      ha='center', va='bottom', fontsize=9, fontweight='bold')
 
-plt.xlabel('Model', fontsize=12)
+plt.xlabel('Modelo', fontsize=12)
 plt.ylabel('Performance (MLUps)', fontsize=12)
-plt.title(f'LBM Performance by Model and Precision Mode\n{gpu_name} - Highest MLUps', 
+plt.title(f'Desempenho LBM por Modelo e Precisão\n{gpu_name} - Maior MLUps', 
           fontsize=14, fontweight='bold')
 plt.xticks(x, models)
-plt.legend(title='Precision')
+plt.legend(title='Precisão')
 plt.grid(axis='y', alpha=0.3)
 plt.tight_layout()
 plt.savefig(f'benchmarks/precision_comparison_{gpu_name_safe}_highest.png')
@@ -173,9 +173,9 @@ for i, v in enumerate(cell_sizes):
         color='#333', bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', boxstyle='round,pad=0.2')
     )
 
-plt.xlabel('Precision Model', fontsize=13, fontweight='bold')
-plt.ylabel('Cell Size (Bytes)', fontsize=13, fontweight='bold')
-plt.title('Cell Size by Precision', fontsize=15, fontweight='bold', pad=15)
+plt.xlabel('Precisão', fontsize=13, fontweight='bold')
+plt.ylabel('Tamanho da célula (Bytes)', fontsize=13, fontweight='bold')
+plt.title('Tamanho da célula por precisão', fontsize=15, fontweight='bold', pad=15)
 plt.xticks(x, selected_precisions, fontsize=12)
 plt.yticks(fontsize=11)
 plt.grid(axis='y', alpha=0.18, linestyle='--', zorder=0)
@@ -217,10 +217,10 @@ for i, precision in enumerate(precision_modes):
             plt.text(x[j] + offset, v + max(values) * 0.03, f'{e:.2f}x',
                      ha='center', va='bottom', fontsize=9, fontweight='bold')
 
-plt.axhline(max_bandwidth_GBs, color='k', linestyle='--', linewidth=1.5, label='Theoretical Max')
-plt.xlabel('Model', fontsize=12)
-plt.ylabel('Bandwidth (GB/s)', fontsize=12)
-plt.title(f'LBM: Real vs Theoretical Bandwidth (GB/s)\n{gpu_name}', fontsize=14, fontweight='bold')
+plt.axhline(max_bandwidth_GBs, color='k', linestyle='--', linewidth=1.5, label='Máximo Teórico')
+plt.xlabel('Modelo', fontsize=12)
+plt.ylabel('Largura de banda (GB/s)', fontsize=12)
+plt.title(f'LBM: Largura de banda real vs teórica (GB/s)\n{gpu_name}', fontsize=14, fontweight='bold')
 plt.xticks(x, models)
 plt.legend(framealpha=1)
 plt.grid(axis='y', alpha=0.3)

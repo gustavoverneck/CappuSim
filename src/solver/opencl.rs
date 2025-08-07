@@ -237,10 +237,6 @@ impl LBM {
             PrecisionMode::FP16S | PrecisionMode::FP16C => {
                 f_bytes = n * q * 2; // half = 2 bytes
                 f_new_bytes = n * q * 2;
-            },
-            _ => {
-                f_bytes = n * q * std::mem::size_of::<f32>();
-                f_new_bytes = n * q * std::mem::size_of::<f32>();
             }
         }
 

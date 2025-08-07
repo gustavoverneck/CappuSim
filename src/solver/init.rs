@@ -69,8 +69,6 @@ impl LBM {
             context: None,
             queue: None,
             program: None,
-            // streaming_kernel: None,
-            // collision_kernel: None,
             stream_collide_kernel: None,
             equilibrium_kernel: None,
             found_errors: false,
