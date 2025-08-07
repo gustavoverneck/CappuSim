@@ -65,7 +65,7 @@ __kernel void stream_collide_kernel(
     // --- Collision ---
     if (flags[n] == FLAG_EQ) {
         // Use prescribed velocity and density from host
-        int offset = n * 3
+        int offset = n * 3;
         ux = u[offset + 0];
         uy = u[offset + 1];
         uz = u[offset + 2];
