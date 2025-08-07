@@ -79,6 +79,38 @@ class VTKViewer(QtWidgets.QMainWindow):
         stream_field_row.addWidget(self.stream_field_box)
         sidebar_layout.addLayout(stream_field_row)
 
+        # Transparência do campo escalar
+        opacity_row = QtWidgets.QHBoxLayout()
+        opacity_row.addWidget(QtWidgets.QLabel('Opacidade:'))
+        self.opacity_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.opacity_slider.setMinimum(10)  # 10% mínimo para visibilidade
+        self.opacity_slider.setMaximum(100)  # 100% opaco
+        self.opacity_slider.setValue(80)  # 80% por padrão
+        self.opacity_slider.setToolTip('Ajusta a opacidade do campo escalar')
+        opacity_row.addWidget(self.opacity_slider)
+        self.opacity_label = QtWidgets.QLabel('80%')
+        self.opacity_label.setMinimumWidth(30)
+        opacity_row.addWidget(self.opacity_label)
+        sidebar_layout.addLayout(opacity_row)
+
+        # Tema do campo escalar
+        scalar_theme_row = QtWidgets.QHBoxLayout()
+        scalar_theme_row.addWidget(QtWidgets.QLabel('Tema escalar:'))
+        self.scalar_theme_box = QtWidgets.QComboBox()
+        self.scalar_theme_box.addItems(['viridis', 'plasma', 'turbo', 'cool', 'hot', 'jet', 'rainbow'])
+        self.scalar_theme_box.setCurrentText('turbo')
+        scalar_theme_row.addWidget(self.scalar_theme_box)
+        sidebar_layout.addLayout(scalar_theme_row)
+
+        # Tema do streamline
+        stream_theme_row = QtWidgets.QHBoxLayout()
+        stream_theme_row.addWidget(QtWidgets.QLabel('Tema streamline:'))
+        self.stream_theme_box = QtWidgets.QComboBox()
+        self.stream_theme_box.addItems(['viridis', 'plasma', 'turbo', 'cool', 'hot', 'jet', 'rainbow'])
+        self.stream_theme_box.setCurrentText('plasma')
+        stream_theme_row.addWidget(self.stream_theme_box)
+        sidebar_layout.addLayout(stream_theme_row)
+
         sidebar_layout.addStretch(1)
 
         # Adiciona sidebar ao layout principal
@@ -96,6 +128,9 @@ class VTKViewer(QtWidgets.QMainWindow):
         # Conexões
         self.scalar_field_box.currentTextChanged.connect(self.on_scalar_field_changed)
         self.stream_field_box.currentTextChanged.connect(self.on_stream_field_changed)
+        self.opacity_slider.valueChanged.connect(self.on_opacity_changed)
+        self.scalar_theme_box.currentTextChanged.connect(self.on_theme_changed)
+        self.stream_theme_box.currentTextChanged.connect(self.on_theme_changed)
         
         # Aplicar estilo inicial
         self.update_ui_style('Default')
@@ -117,6 +152,46 @@ class VTKViewer(QtWidgets.QMainWindow):
             else:
                 self.show_field(self.current_field)
 
+    def on_opacity_changed(self, value):
+        """Atualiza a transparência do campo escalar"""
+        self.opacity_label.setText(f'{value}%')
+        
+        if self.grid is not None:
+            # Atualiza a visualização atual
+            stream_field = self.stream_field_box.currentText()
+            if stream_field != 'Nenhum':
+                self.show_streamlines(stream_field)
+            else:
+                self.show_field(self.current_field)
+
+    def on_theme_changed(self):
+        """Atualiza a visualização quando os temas mudam"""
+        if self.grid is not None:
+            # Atualiza a visualização atual
+            stream_field = self.stream_field_box.currentText()
+            if stream_field != 'Nenhum':
+                self.show_streamlines(stream_field)
+            else:
+                self.show_field(self.current_field)
+
+    def get_scalar_colormap(self, field):
+        """Retorna o colormap apropriado para o campo escalar baseado na seleção do usuário"""
+        return self.scalar_theme_box.currentText()
+
+    def get_stream_colormap(self, field):
+        """Retorna o colormap apropriado para streamlines baseado na seleção do usuário"""
+        return self.stream_theme_box.currentText()
+
+    def get_theme_opts(self):
+        """Retorna as opções de tema baseadas no tema da interface e seleções de colormap"""
+        bg_color = 'black' if self.theme == 'dark' else 'white'
+        return {
+            'bg': bg_color,
+            'density_cmap': self.get_scalar_colormap('density'),
+            'vel_cmap': self.get_scalar_colormap('velocity'),
+            'vort_cmap': self.get_scalar_colormap('vorticity')
+        }
+
     def update_solids(self, state):
         self.show_solids = bool(state)
         print(f"Debug: update_solids chamado com state={state}, show_solids={self.show_solids}")
@@ -135,28 +210,30 @@ class VTKViewer(QtWidgets.QMainWindow):
             else:
                 self.show_field(self.current_field)
 
-    def add_scalar_field_to_plot(self, grid, field, theme_opts):
+    def add_scalar_field_to_plot(self, grid, field, theme_opts, show_scalar_bar=True):
         """Adiciona um campo escalar ao plot atual"""
+        opacity = self.opacity_slider.value() / 100.0
+        
         if field == 'velocity' and 'velocity' in grid.array_names:
             vel = grid['velocity']
             vel_mag = np.linalg.norm(vel, axis=1)
             vmin, vmax = np.nanmin(vel_mag), np.nanmax(vel_mag)
-            self.plotter.add_mesh(grid, scalars=vel_mag, cmap=theme_opts['vel_cmap'], opacity=0.3, clim=(vmin, vmax), show_scalar_bar=False)
+            self.plotter.add_mesh(grid, scalars=vel_mag, cmap=theme_opts['vel_cmap'], opacity=opacity, clim=(vmin, vmax), show_scalar_bar=show_scalar_bar, scalar_bar_args={'title': 'Velocidade'} if show_scalar_bar else None)
         elif field == 'vorticity' and 'vorticity' in grid.array_names:
             vort = grid['vorticity']
             vort_mag = np.linalg.norm(vort, axis=1)
             vmin, vmax = np.nanmin(vort_mag), np.nanmax(vort_mag)
-            self.plotter.add_mesh(grid, scalars=vort_mag, cmap=theme_opts['vort_cmap'], opacity=0.3, clim=(vmin, vmax), show_scalar_bar=False)
+            self.plotter.add_mesh(grid, scalars=vort_mag, cmap=theme_opts['vort_cmap'], opacity=opacity, clim=(vmin, vmax), show_scalar_bar=show_scalar_bar, scalar_bar_args={'title': 'Vorticidade'} if show_scalar_bar else None)
         elif field == 'q_criterion' and 'q_criterion' in grid.array_names:
             try:
                 surf = grid.contour(isosurfaces=[0.0], scalars='q_criterion')
-                self.plotter.add_mesh(surf, color='red', opacity=0.3, show_scalar_bar=False)
+                self.plotter.add_mesh(surf, color='red', opacity=opacity, show_scalar_bar=False)
             except Exception:
                 pass
         elif field == 'density' and 'density' in grid.array_names:
             dens = grid['density']
             dmin, dmax = np.nanmin(dens), np.nanmax(dens)
-            self.plotter.add_mesh(grid, scalars='density', cmap=theme_opts['density_cmap'], opacity=0.3, clim=(dmin, dmax), show_scalar_bar=False)
+            self.plotter.add_mesh(grid, scalars='density', cmap=theme_opts['density_cmap'], opacity=opacity, clim=(dmin, dmax), show_scalar_bar=show_scalar_bar, scalar_bar_args={'title': 'Densidade'} if show_scalar_bar else None)
 
     def add_solids_to_plot(self):
         """Adiciona geometria dos sólidos ao plot se a opção estiver habilitada"""
@@ -205,12 +282,8 @@ class VTKViewer(QtWidgets.QMainWindow):
         # Sempre limpa o plotter para garantir atualização correta
         self.plotter.clear()
         
-        # Theme colormaps
-        theme_opts = {
-            'light': {'bg': 'white', 'density_cmap': 'turbo', 'vel_cmap': 'plasma', 'vort_cmap': 'cool'},
-            'dark':  {'bg': 'black', 'density_cmap': 'viridis', 'vel_cmap': 'plasma', 'vort_cmap': 'cool'}
-        }
-        t = theme_opts.get(self.theme, theme_opts['light'])
+        # Theme options usando as seleções do usuário
+        t = self.get_theme_opts()
         self.plotter.set_background(t['bg'])
         
         # Mask solids if needed
@@ -222,7 +295,7 @@ class VTKViewer(QtWidgets.QMainWindow):
         # Se há campo escalar selecionado, adiciona primeiro
         scalar_field = self.scalar_field_box.currentText()
         if scalar_field != 'Nenhum':
-            self.add_scalar_field_to_plot(grid, scalar_field, t)
+            self.add_scalar_field_to_plot(grid, scalar_field, t, show_scalar_bar=False)
         
         # Adiciona sólidos se necessário
         self.add_solids_to_plot()
@@ -236,11 +309,11 @@ class VTKViewer(QtWidgets.QMainWindow):
 
         if field == 'velocity' and 'velocity' in grid.array_names:
             vectors = 'velocity'
-            cmap = t['vel_cmap']
+            cmap = self.get_stream_colormap(field)
             bar_title = 'Velocidade'
         elif field == 'vorticity' and 'vorticity' in grid.array_names:
             vectors = 'vorticity'
-            cmap = t['vort_cmap']
+            cmap = self.get_stream_colormap(field)
             bar_title = 'Vorticidade'
         else:
             if scalar_field == 'Nenhum':
@@ -270,6 +343,7 @@ class VTKViewer(QtWidgets.QMainWindow):
                 stream.tube(radius=0.2),
                 scalars='mag',
                 cmap=cmap,
+                opacity=0.7,  # Reduz opacidade dos streamlines
                 clim=(vmin, vmax) if vmin is not None and vmax is not None else None,
                 show_scalar_bar=True,
                 scalar_bar_args={'title': bar_title},
@@ -355,12 +429,8 @@ class VTKViewer(QtWidgets.QMainWindow):
             self.plotter.reset_camera()
             return
             
-        # Theme colormaps
-        theme_opts = {
-            'light': {'bg': 'white', 'density_cmap': 'turbo', 'vel_cmap': 'plasma', 'vort_cmap': 'cool'},
-            'dark':  {'bg': 'black', 'density_cmap': 'viridis', 'vel_cmap': 'plasma', 'vort_cmap': 'cool'}
-        }
-        t = theme_opts.get(self.theme, theme_opts['light'])
+        # Theme options usando as seleções do usuário
+        t = self.get_theme_opts()
         self.plotter.set_background(t['bg'])
         # Mask solids if needed
         grid = self.grid
@@ -368,16 +438,18 @@ class VTKViewer(QtWidgets.QMainWindow):
             mask = grid['solid'] < 1
             grid = grid.extract_points(mask)
         
+        opacity = self.opacity_slider.value() / 100.0
+        
         if field == 'velocity' and 'velocity' in grid.array_names:
             vel = grid['velocity']
             vel_mag = np.linalg.norm(vel, axis=1)
             vmin, vmax = np.nanmin(vel_mag), np.nanmax(vel_mag)
-            self.plotter.add_mesh(grid, scalars=vel_mag, cmap=t['vel_cmap'], show_scalar_bar=True, clim=(vmin, vmax), scalar_bar_args={'title': 'Velocidade'})
+            self.plotter.add_mesh(grid, scalars=vel_mag, cmap=t['vel_cmap'], show_scalar_bar=True, clim=(vmin, vmax), opacity=opacity, scalar_bar_args={'title': 'Velocidade'})
         elif field == 'vorticity' and 'vorticity' in grid.array_names:
             vort = grid['vorticity']
             vort_mag = np.linalg.norm(vort, axis=1)
             vmin, vmax = np.nanmin(vort_mag), np.nanmax(vort_mag)
-            self.plotter.add_mesh(grid, scalars=vort_mag, cmap=t['vort_cmap'], show_scalar_bar=True, clim=(vmin, vmax), scalar_bar_args={'title': 'Vorticidade'})
+            self.plotter.add_mesh(grid, scalars=vort_mag, cmap=t['vort_cmap'], show_scalar_bar=True, clim=(vmin, vmax), opacity=opacity, scalar_bar_args={'title': 'Vorticidade'})
         elif field == 'q_criterion' and 'q_criterion' in grid.array_names:
             # Isosurface Q=0 (ou Q>0) para destacar regiões vorticosas
             try:
@@ -397,7 +469,7 @@ class VTKViewer(QtWidgets.QMainWindow):
         elif field == 'density' and 'density' in grid.array_names:
             dens = grid['density']
             dmin, dmax = np.nanmin(dens), np.nanmax(dens)
-            self.plotter.add_mesh(grid, scalars='density', cmap=t['density_cmap'], show_scalar_bar=True, clim=(dmin, dmax), scalar_bar_args={'title': 'Densidade'})
+            self.plotter.add_mesh(grid, scalars='density', cmap=t['density_cmap'], show_scalar_bar=True, clim=(dmin, dmax), opacity=opacity, scalar_bar_args={'title': 'Densidade'})
         else:
             self.plotter.add_mesh(grid, color='gray')
         
@@ -509,6 +581,22 @@ class VTKViewer(QtWidgets.QMainWindow):
                 background-color: #4a9eff;
                 border-radius: 2px;
             }
+            QSlider::groove:horizontal {
+                background-color: #d0d0d0;
+                height: 6px;
+                border-radius: 3px;
+            }
+            QSlider::handle:horizontal {
+                background-color: #4a9eff;
+                border: 1px solid #2980b9;
+                width: 16px;
+                height: 16px;
+                border-radius: 8px;
+                margin: -6px 0;
+            }
+            QSlider::handle:horizontal:hover {
+                background-color: #3498db;
+            }
         """
 
     def get_dark_style(self):
@@ -612,6 +700,22 @@ class VTKViewer(QtWidgets.QMainWindow):
             QProgressBar::chunk {
                 background-color: #4a9eff;
                 border-radius: 2px;
+            }
+            QSlider::groove:horizontal {
+                background-color: #555555;
+                height: 6px;
+                border-radius: 3px;
+            }
+            QSlider::handle:horizontal {
+                background-color: #4a9eff;
+                border: 1px solid #2980b9;
+                width: 16px;
+                height: 16px;
+                border-radius: 8px;
+                margin: -6px 0;
+            }
+            QSlider::handle:horizontal:hover {
+                background-color: #3498db;
             }
         """
 
