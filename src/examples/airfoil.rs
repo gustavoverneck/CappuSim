@@ -86,8 +86,8 @@ pub fn airfoil_2d_example() {
     });
 
     // Configure output
-    lbm.set_output_vtk(true);
-    lbm.set_output_interval(200);
+    // lbm.set_output_vtk(true);
+    // lbm.set_output_interval(200);
 
     // Run simulation
     lbm.run(10000);
@@ -111,7 +111,11 @@ pub fn airfoil_3d_example() {
     let span_length = nz as f32 * 0.8; // 80% of domain depth
     
     // Initialize LBM simulation with D3Q19 model for 3D
-    let mut lbm = LBM::new(nx, ny, nz, "D3Q19".to_string(), viscosity, PrecisionMode::FP32);
+    let mut lbm = LBM::new(nx, ny, nz, 
+        "D3Q19".to_string(), 
+        viscosity, 
+        PrecisionMode::FP32
+    );
 
     // NACA 0012 parameters
     let thickness = 0.12; // 12% thickness
@@ -132,27 +136,24 @@ pub fn airfoil_3d_example() {
         let dx = xf - cx;
         let dy = yf - cy;
         let dz = zf - cz;
-        
-        // Rotate coordinates (around z-axis)
+
+        // Rotaciona em torno do centro da asa (z fixo)
         let x_rot = dx * angle_rad.cos() + dy * angle_rad.sin();
         let y_rot = -dx * angle_rad.sin() + dy * angle_rad.cos();
         let z_rot = dz;
 
-        // Normalized chord position
+        // Posição normalizada ao longo do bordo de ataque (chord)
         let x_c = x_rot / chord_length;
 
-        // Check if point is within wing span
+        // Centralizar a asa no domínio: centro em cy,cz, simetria em y
         if x_c >= 0.0 && x_c <= 1.0 && z_rot.abs() <= span_length / 2.0 {
             // NACA 0012 formula
-            let yt = 5.0 * thickness * (0.2969 * x_c.sqrt() - 0.1260 * x_c 
-                - 0.3516 * x_c.powi(2) + 0.2843 * x_c.powi(3) 
+            let yt = 5.0 * thickness * (0.2969 * x_c.sqrt() - 0.1260 * x_c
+                - 0.3516 * x_c.powi(2) + 0.2843 * x_c.powi(3)
                 - 0.1015 * x_c.powi(4));
-            
-            let y_upper = y_rot - yt * chord_length;
-            let y_lower = y_rot + yt * chord_length;
 
-            // Check if point is inside airfoil
-            if y_rot >= y_lower && y_rot <= y_upper {
+            // O perfil é simétrico em relação a y_rot = 0
+            if y_rot.abs() <= yt * chord_length {
                 lbm.flags[n] = FLAG_SOLID;
                 return;
             }
@@ -193,12 +194,12 @@ pub fn airfoil_3d_example() {
     });
 
     // Configure output
-    lbm.set_output_vtk(true);
-    lbm.set_output_interval(200);
+    // lbm.set_output_vtk(true);
+    // lbm.set_output_interval(200);
 
     // Run simulation
-    lbm.run(10000);
-    lbm.export_to_vtk(&format!("results/airfoil3d_aoa_{}.vtk", angle_of_attack))
+    lbm.run(5000);
+    lbm.export_to_vtk(&format!("output/airfoil3d_aoa_{}.vtk", angle_of_attack))
         .expect("Failed to write VTK output");
 
     let re = u0 * chord_length / viscosity;

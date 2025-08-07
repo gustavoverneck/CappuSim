@@ -203,6 +203,13 @@ impl LBM {
             writeln!(writer, "{:.6} {:.6} {:.6}", vx, vy, vz)?;
         }
 
+        // Solid (flags) field for ParaView visualization
+        // writeln!(writer, "SCALARS solid int 1")?;
+        // writeln!(writer, "LOOKUP_TABLE default")?;
+        // for val in &self.flags {
+        //     let solid = if *val == 1 { 1 } else { 0 };
+        //     writeln!(writer, "{}", solid)?;
+        // }
         Ok(())
     }
 }
