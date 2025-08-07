@@ -26,14 +26,14 @@ fn main() {
     // To run an example, uncomment the corresponding function call below:
     // or set your own setup. Check /examples for inspiration.
 
-    // LBM::benchmark();
+    LBM::benchmark();
 
     // airfoil_2d_example();
     // airfoil_3d_example();
     // couette_2d_example();
     // couette_3d_example();
     // liddriven_cavity_2d_example();
-    liddriven_cavity_3d_example();
+    // liddriven_cavity_3d_example();
     // poiseuille_2d_example();
     // von_karman_vortex_2d_example
 
