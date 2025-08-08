@@ -7,12 +7,12 @@ use solver::lbm::LBM;
 use solver::precision::PrecisionMode; 
 
 pub fn couette_2d_example() {
-    let nx = 256;
+    let nx = 128;
     let ny = 64;
     let nz = 1;
-    let viscosity = 0.05;
+    let viscosity = 0.1;
     let u0 = 0.1;
-    let steps = 20000;
+    let steps = 100000;
 
     // Initialize LBM simulation
     let mut lbm = LBM::new(nx, ny, nz, "D2Q9".to_string(), viscosity, PrecisionMode::FP32);
@@ -26,7 +26,7 @@ pub fn couette_2d_example() {
             lbm.velocity[n].y = 0.0;
         } else if y == ny - 1 {
             // Top wall: moving with velocity u0
-            lbm.flags[n] = FLAG_SOLID;
+            lbm.flags[n] = FLAG_EQ;
             lbm.velocity[n].x = u0;
             lbm.velocity[n].y = 0.0;
         } else {
@@ -37,7 +37,8 @@ pub fn couette_2d_example() {
             lbm.density[n] = 1.0;
         }
     });
-
+    // lbm.set_output_vtk(true);
+    // lbm.set_output_interval(1);
     // Run the simulation
     lbm.run(steps);
     lbm.export_to_vtk("output/couette.vtk").unwrap();

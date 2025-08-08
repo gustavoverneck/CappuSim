@@ -7,13 +7,12 @@ use solver::lbm::LBM;
 use solver::precision::PrecisionMode; 
 
 pub fn poiseuille_2d_example() {
-    let nx = 256;
-    let ny = 64;
+    let nx = 512;
+    let ny = 128;
     let nz = 1;
-    let viscosity = 0.05;
+    let viscosity = 0.1;
     let u0 = 0.1;
-    let steps = 20000;
-//    let output_interval = 19999;
+    let steps = 100000;
 
     // Initialize LBM simulation
     let mut lbm = LBM::new(nx, ny, nz, "D2Q9".to_string(), viscosity, PrecisionMode::FP32);
@@ -46,7 +45,7 @@ pub fn poiseuille_2d_example() {
 
     // Configure output
 //    lbm.set_output_vtk(true);
-//    lbm.set_output_interval(output_interval);
+//    lbm.set_output_interval(1000);
 
     // Run the simulation
     lbm.run(steps);

@@ -28,8 +28,9 @@ def plot_2d_streamlines(vtk_file, density_threshold=0.01, show_solid=True, theme
     slice_ = grid.slice(normal='z', origin=(0, 0, z_mid))
 
     # Streamlines
+    seed = slice_.center  # or use a grid/array of points for more streamlines
     stream = slice_.streamlines_from_source(
-        source_center=slice_.center,
+        seed,
         vectors='velocity',
         n_points=200,
         max_time=200.0,
