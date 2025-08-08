@@ -1,12 +1,14 @@
 #![allow(non_snake_case)]
 #![allow(clippy::upper_case_acronyms)]
 
+use std::vec;
+
 use super::lbm::LBM;
 
 use crate::solver::transforms::xyz_from_n;
 use crate::utils::velocity::Velocity;
 use crate::solver::precision::PrecisionMode;
-
+use crate::utils::terminal_utils::print_warning;
 
 impl LBM {
     pub fn new(
@@ -75,6 +77,8 @@ impl LBM {
             output_interval: 0,
             output_csv: false,
             output_vtk: false,
+            use_constant_force: false,
+            constant_force: None,
         }
     }
 
@@ -134,6 +138,16 @@ impl LBM {
             f(self, x, y, z, n);
         }
         self.u = self.velocity_to_u(); // Transform 3D array to Flattened array
-        self.velocity = vec![];
+        self.velocity = vec![]; 
+    }
+
+    pub fn set_constant_force(&mut self, F: Vec<f32>) {
+        self.constant_force = Some(F);
+        if let Some(force) = &self.constant_force {
+            if force == &[0.0, 0.0, 0.0] {
+                print_warning("Warning: Constant force is set to zero vector. No force will be applied.");
+            }
+        }
+        self.use_constant_force = true;
     }
 }

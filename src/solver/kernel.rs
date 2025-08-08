@@ -6,8 +6,6 @@ use crate::solver::precision::PrecisionMode;
 use std::error::Error;
 
 pub const KERNEL_EQUILIBRIUM_SRC: &str = include_str!("../kernels/kernel_equilibrium.cl");
-//pub const KERNEL_STREAMING_SRC: &str = include_str!("../kernels/kernel_streaming.cl");
-//pub const KERNEL_COLLISION_SRC: &str = include_str!("../kernels/kernel_collision.cl");
 pub const KERNEL_VELOCITY_SETS_SRC: &str = include_str!("../kernels/kernel_velocity_sets.cl");
 pub const KERNEL_STREAM_COLLIDE_SRC: &str = include_str!("../kernels/kernel_stream_collide.cl");
 
@@ -25,6 +23,22 @@ impl LBM {
             },
         };
 
+        // Add force definition if use_constant_force is enabled
+        let constant_force_define = if self.use_constant_force {
+            format!(
+            r#"#define USE_CONSTANT_FORCE
+            #define FX {}
+            #define FY {}
+            #define FZ {}
+            "#,
+            self.constant_force.as_ref().unwrap()[0],
+            self.constant_force.as_ref().unwrap()[1],
+            self.constant_force.as_ref().unwrap()[2]
+            )
+        } else {
+            "".to_string()
+        };
+
         let kernel_source = format!(
             r#"
         {}
@@ -40,6 +54,7 @@ impl LBM {
         {}
         {}
         {}
+        {}
         "#,
             precision_defines,
             self.Nx,
@@ -48,6 +63,7 @@ impl LBM {
             self.N,
             self.Q,
             self.model.as_str(),
+            constant_force_define,
             KERNEL_VELOCITY_SETS_SRC,
             KERNEL_STREAM_COLLIDE_SRC,
             KERNEL_EQUILIBRIUM_SRC,

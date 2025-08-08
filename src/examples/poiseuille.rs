@@ -11,33 +11,22 @@ pub fn poiseuille_2d_example() {
     let ny = 128;
     let nz = 1;
     let viscosity = 0.1;
-    let u0 = 0.1;
+    let fx = 1e-5;
     let steps = 100000;
 
     // Initialize LBM simulation
     let mut lbm = LBM::new(nx, ny, nz, "D2Q9".to_string(), viscosity, PrecisionMode::FP32);
+    lbm.set_constant_force(vec![fx, 0.0, 0.0]);
 
     // Set boundary and initial conditions
-    lbm.set_conditions(|lbm, x, y, _z, n| {
+    lbm.set_conditions(|lbm, _x, y, _z, n| {
         if y == 0 || y == ny - 1 {
             // Top and bottom walls
             lbm.flags[n] = FLAG_SOLID;
-        } else if x == 0 && y < ny - 1 {
-            // Inlet: left boundary
-            lbm.flags[n] = FLAG_EQ;
-            lbm.velocity[n].x = u0;
-            lbm.velocity[n].y = 0.0;
-            lbm.density[n] = 1.0;
-        } else if x == nx - 1 && y < ny - 1 {
-            // Outlet: right boundary
-            lbm.flags[n] = FLAG_EQ;
-            lbm.velocity[n].x = u0;
-            lbm.velocity[n].y = 0.0;
-            lbm.density[n] = 1.0;
         } else {
             // Interior: fluid
             lbm.flags[n] = FLAG_FLUID;
-            lbm.velocity[n].x = u0;
+            lbm.velocity[n].x = 0.0;
             lbm.velocity[n].y = 0.0;
             lbm.density[n] = 1.0;
         }

@@ -41,4 +41,6 @@ pub struct LBM {
     pub output_csv: bool,
     pub output_vtk: bool,
     pub precision_mode: PrecisionMode,
+    pub use_constant_force: bool,
+    pub constant_force: Option<Vec<f32>>,
 }
