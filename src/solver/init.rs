@@ -43,6 +43,7 @@ impl LBM {
         };
 
         LBM {
+            // --- Grid and Model Parameters ---
             Nx,
             Ny,
             Nz,
@@ -51,16 +52,22 @@ impl LBM {
             Q,
             viscosity,
             omega: 1.0 / (3.0 * viscosity + 0.5),
-            time_steps: 0,
             precision_mode: precision,
-            f: vec![0.0; size * Q],
-            f_new: vec![0.0; size * Q],
+            
             f_storage,
             f_compute_buffer,
+
+            // --- Simulation State ---
+            time_steps: 0,
+            found_errors: false,
+
+            // --- Lattice Data Arrays ---
             density: vec![1.0; size], // Initialize density to 1.0
-            u: vec![0.0; size * 3], // Initialize velocity to zero (size * 3 for 3 components per grid point)
+            u: vec![0.0; size * 3],   // Initialize velocity to zero (size * 3 for 3 components per grid point)
             velocity: vec![Velocity::zero(); size], // Initialize input velocity to zero
             flags: vec![0u8; size],   // Initialize flags to 0 (fluid)
+
+            // --- OpenCL Buffers and Handles ---
             f_buffer: None,
             f_new_buffer: None,
             density_buffer: None,
@@ -73,10 +80,13 @@ impl LBM {
             program: None,
             stream_collide_kernel: None,
             equilibrium_kernel: None,
-            found_errors: false,
+
+            // --- Output and Diagnostics ---
             output_interval: 0,
             output_csv: false,
             output_vtk: false,
+
+            // --- Forces ---
             use_constant_force: false,
             constant_force: None,
         }

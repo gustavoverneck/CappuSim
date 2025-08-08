@@ -59,7 +59,6 @@ impl LBM {
             .queue(self.queue.as_ref().unwrap().clone())
             .flags(MEM_READ_WRITE)
             .len(self.N * self.Q)
-            .copy_host_slice(&self.f)
             .build()
             .expect("Failed to build 'f' buffer.");
         Ok(f_buffer)
@@ -70,7 +69,6 @@ impl LBM {
             .queue(self.queue.as_ref().unwrap().clone())
             .flags(MEM_READ_WRITE)
             .len(self.N * self.Q)
-            .copy_host_slice(&self.f_new)
             .build()
             .expect("Failed to build 'f_new' buffer.");
         Ok(f_new_buffer)
@@ -112,49 +110,6 @@ impl LBM {
     pub fn get_optimal_work_group_size(&self) -> Result<usize, Box<dyn Error>> {
         Ok(64)  // Always return 64
     }
-
-    // pub fn create_streaming_kernel(&mut self) -> Result<(), Box<dyn Error>> {
-    //     let work_group_size = self.get_optimal_work_group_size()?;
-        
-    //     self.streaming_kernel = Some(
-    //         Kernel::builder()
-    //             .program(self.program.as_ref().unwrap())
-    //             .name("streaming_kernel")
-    //             .queue(self.queue.as_ref().unwrap().clone())
-    //             .global_work_size(self.N)
-    //             .local_work_size(work_group_size)
-    //             .arg(self.f_buffer.as_ref().unwrap())
-    //             .arg(self.f_new_buffer.as_ref().unwrap())
-    //             .arg(self.flags_buffer.as_ref().unwrap())
-    //             .arg(0i32)
-    //             .build()
-    //             .expect("Failed to build OpenCL 'streaming_kernel'."),
-    //     );
-    //     Ok(())
-    // }
-
-    // pub fn create_collision_kernel(&mut self) -> Result<(), Box<dyn Error>> {
-    //     let work_group_size = self.get_optimal_work_group_size()?;
-        
-    //     self.collision_kernel = Some(
-    //         Kernel::builder()
-    //             .program(self.program.as_ref().unwrap())
-    //             .name("collision_kernel")
-    //             .queue(self.queue.as_ref().unwrap().clone())
-    //             .global_work_size(self.N)
-    //             .local_work_size(work_group_size)
-    //             .arg(self.f_buffer.as_ref().unwrap())
-    //             .arg(self.f_new_buffer.as_ref().unwrap())
-    //             .arg(self.density_buffer.as_ref().unwrap())
-    //             .arg(self.flags_buffer.as_ref().unwrap())
-    //             .arg(self.u_buffer.as_ref().unwrap())
-    //             .arg(self.omega)
-    //             .arg(0i32)
-    //             .build()
-    //             .expect("Failed to build OpenCL 'collision_kernel'."),
-    //     );
-    //     Ok(())
-    // }
 
     pub fn create_stream_collide_kernel(&mut self) -> Result<(), Box<dyn Error>> {
         // let work_group_size = self.get_optimal_work_group_size()?;
