@@ -88,7 +88,25 @@ __kernel void stream_collide_kernel(
             float cu = c[q][0] * ux + c[q][1] * uy + c[q][2] * uz;
             float feq = local_rho * w[q] * (FLOAT_ONE + FLOAT_THREE * cu + 
                 FLOAT_FOUR_POINT_FIVE * cu * cu - FLOAT_ONE_POINT_FIVE * u2);
-            write_buf[q * N + n] = (1.0f - omega) * f_pop[q] + omega * feq;
+            float f_new_val = (1.0f - omega) * f_pop[q] + omega * feq;
+            
+            #ifdef USE_CONSTANT_FORCE
+            // Guo Force term
+            float cF = c[q][0] * FX + c[q][1] * FY + c[q][2] * FZ;
+            
+            // Proteção contra divisão por zero
+            float force_term = 0.0f;
+            if (local_rho > FLOAT_EPSILON) {
+                force_term = w[q] * (FLOAT_ONE - FLOAT_CONST(0.5) * omega) * (
+                    FLOAT_THREE * ((c[q][0] - ux) * FX + (c[q][1] - uy) * FY + (c[q][2] - uz) * FZ) +
+                    FLOAT_CONST(9.0) * cF * cu
+                ) / local_rho;
+            }
+            
+            f_new_val += force_term;
+            #endif
+            
+            write_buf[q * N + n] = f_new_val;
         }
     }
 }
@@ -174,7 +192,7 @@ __kernel void stream_collide_kernel(
         // Standard BGK collision for fluid cells
         rho[n] = local_rho;
         
-        // Compute offset apenas uma vez
+        // Offset
         int offset = n * 3;
         u[offset + 0] = ux;
         u[offset + 1] = uy;
@@ -185,6 +203,23 @@ __kernel void stream_collide_kernel(
             float feq = local_rho * w[q] * (FLOAT_ONE + FLOAT_THREE * cu + 
                 FLOAT_FOUR_POINT_FIVE * cu * cu - FLOAT_ONE_POINT_FIVE * u2);
             float f_new_val = (1.0f - omega) * f_pop[q] + omega * feq;
+            
+            #ifdef USE_CONSTANT_FORCE
+            // Guo Force term
+            float cF = c[q][0] * FX + c[q][1] * FY + c[q][2] * FZ;
+            
+            // Proteção contra divisão por zero
+            float force_term = 0.0f;
+            if (local_rho > FLOAT_EPSILON) {
+                force_term = w[q] * (FLOAT_ONE - FLOAT_CONST(0.5) * omega) * (
+                    FLOAT_THREE * ((c[q][0] - ux) * FX + (c[q][1] - uy) * FY + (c[q][2] - uz) * FZ) +
+                    FLOAT_CONST(9.0) * cF * cu
+                ) / local_rho;
+            }
+            
+            f_new_val += force_term;
+            #endif
+            
             vstore_half(f_new_val, q * N + n, write_buf_fp16);
         }
     }
@@ -281,6 +316,22 @@ __kernel void stream_collide_kernel(
             float cu = (float)c[q][0] * ux + (float)c[q][1] * uy + (float)c[q][2] * uz;
             float feq = local_rho * w[q] * (FLOAT_ONE + FLOAT_THREE * cu + FLOAT_FOUR_POINT_FIVE * cu * cu - FLOAT_ONE_POINT_FIVE * u2);
             float f_new_val = (1.0f - omega) * (float)f_pop[q] + omega * feq;
+            
+            #ifdef USE_CONSTANT_FORCE
+            // Guo Force term
+            float cF = c[q][0] * FX + c[q][1] * FY + c[q][2] * FZ;  // c é int, conversão automática
+            
+            float force_term = 0.0f;
+            if (local_rho > FLOAT_EPSILON) {
+                force_term = (float)w[q] * (FLOAT_ONE - FLOAT_CONST(0.5) * omega_h) * (  // Usar (float)w[q] e omega_h
+                    FLOAT_THREE * ((c[q][0] - ux) * FX + (c[q][1] - uy) * FY + (c[q][2] - uz) * FZ) +
+                    FLOAT_CONST(9.0) * cF * cu
+                ) / local_rho;
+            }
+            
+            f_new_val += force_term;
+            #endif
+            
             write_buf[q * N + n] = (half)f_new_val;
         }
     }
