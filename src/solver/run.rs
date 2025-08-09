@@ -39,15 +39,15 @@ impl LBM {
                 .expect("Queue finish failed.");
         }
 
-        // Create a progress bar
+        // Create a progress bar with MLUPs display
         let pb = ProgressBar::new(self.time_steps as u64);
         pb.set_style(
             ProgressStyle::default_bar()
-                .template("{spinner:.green} [{bar:55.cyan/blue}] {pos}/{len} ({eta})")
+                .template("{spinner:.green} [{bar:55.cyan/blue}] {pos}/{len} ({eta}) {msg}")
                 .unwrap()
                 .progress_chars("=> "),
         );
-
+        
         // Recreate output folder
         let output_path = Path::new("output");
         if output_path.exists() {
@@ -58,6 +58,8 @@ impl LBM {
 
         // Start timing
         let start_time = Instant::now();
+        let mut last_update_time = start_time;
+        let mut last_step = 0;
 
         // Main Loop using fused stream-collide kernel
         for t in 0..self.time_steps {
@@ -98,12 +100,25 @@ impl LBM {
             }
 
             pb.inc(1);
+            
+            // Calculate instant MLUPs
+            if t % 10 == 0 {
+                let current_time = Instant::now();
+                let elapsed = current_time.duration_since(last_update_time).as_secs_f64();
+                if elapsed > 0.1 {
+                    let steps_since_last = t - last_step;
+                    let current_mlups = (self.N as f64 * steps_since_last as f64) / elapsed / 1_000_000.0;
+                    pb.set_message(format!("[{:.2} MLUPs]", current_mlups));
+                    last_update_time = current_time;
+                    last_step = t;
+                }
+            }
         }
 
         // Calculate total execution time
         let elapsed_time = start_time.elapsed();
         let elapsed_seconds = elapsed_time.as_secs_f64();
-        // Calculate MLUps
+        // Calculate average MLUps
         let mlups = (self.N as f64 * self.time_steps as f64) / elapsed_seconds / 1_000_000.0;
 
         // Read data from GPU to CPU
@@ -111,7 +126,7 @@ impl LBM {
             terminal_utils::print_error(&format!("Error reading data from GPU: {}", err));
             return;
         }
-        pb.finish_with_message("");
+        pb.finish_with_message(format!("[{:.2} MLUPs final]", mlups));
 
         terminal_utils::print_metrics(self.time_steps as u64, elapsed_seconds, mlups);
     }
