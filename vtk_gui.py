@@ -218,7 +218,10 @@ class VTKViewer(QtWidgets.QMainWindow):
             vel = grid['velocity']
             vel_mag = np.linalg.norm(vel, axis=1)
             vmin, vmax = np.nanmin(vel_mag), np.nanmax(vel_mag)
-            self.plotter.add_mesh(grid, scalars=vel_mag, cmap=theme_opts['vel_cmap'], opacity=opacity, clim=(vmin, vmax), show_scalar_bar=show_scalar_bar, scalar_bar_args={'title': 'Velocidade'} if show_scalar_bar else None)
+            if len(vel_mag) == grid.n_points:
+                self.plotter.add_mesh(grid, scalars=vel_mag, cmap=theme_opts['vel_cmap'], opacity=opacity, clim=(vmin, vmax), show_scalar_bar=show_scalar_bar, scalar_bar_args={'title': 'Velocidade'} if show_scalar_bar else None)
+            else:
+                print(f"Error: Number of scalars ({len(vel_mag)}) does not match number of points ({grid.n_points})")
         elif field == 'vorticity' and 'vorticity' in grid.array_names:
             vort = grid['vorticity']
             vort_mag = np.linalg.norm(vort, axis=1)
@@ -334,9 +337,14 @@ class VTKViewer(QtWidgets.QMainWindow):
             if vectors in grid.array_names:
                 vec = grid[vectors]
                 mag = np.linalg.norm(vec, axis=1)
-                stream['mag'] = mag[:stream.n_points]
+                # Corrige para garantir que o tamanho bate com stream.n_points
+                if len(mag) == stream.n_points:
+                    stream['mag'] = mag
+                else:
+                    stream['mag'] = np.ones(stream.n_points)
                 vmin, vmax = np.nanmin(mag), np.nanmax(mag)
             else:
+                stream['mag'] = np.ones(stream.n_points)
                 vmin, vmax = None, None
                 
             self.plotter.add_mesh(
@@ -349,6 +357,7 @@ class VTKViewer(QtWidgets.QMainWindow):
                 scalar_bar_args={'title': bar_title},
             )
         except Exception as e:
+            print(f'Erro ao calcular streamlines: {e}')
             self.plotter.add_text(f'Erro ao calcular streamlines: {e}', color='red')
         self.plotter.reset_camera()
 
@@ -444,7 +453,10 @@ class VTKViewer(QtWidgets.QMainWindow):
             vel = grid['velocity']
             vel_mag = np.linalg.norm(vel, axis=1)
             vmin, vmax = np.nanmin(vel_mag), np.nanmax(vel_mag)
-            self.plotter.add_mesh(grid, scalars=vel_mag, cmap=t['vel_cmap'], show_scalar_bar=True, clim=(vmin, vmax), opacity=opacity, scalar_bar_args={'title': 'Velocidade'})
+            if len(vel_mag) == grid.n_points:
+                self.plotter.add_mesh(grid, scalars=vel_mag, cmap=t['vel_cmap'], show_scalar_bar=True, clim=(vmin, vmax), opacity=opacity, scalar_bar_args={'title': 'Velocidade'})
+            else:
+                print(f"Error: Number of scalars ({len(vel_mag)}) does not match number of points ({grid.n_points})")
         elif field == 'vorticity' and 'vorticity' in grid.array_names:
             vort = grid['vorticity']
             vort_mag = np.linalg.norm(vort, axis=1)
